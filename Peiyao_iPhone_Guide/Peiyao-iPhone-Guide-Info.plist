@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Privacy - NFC Scan Usage Description</key>
+	<string>제품 정보를 확인하기 위해 NFC 스캔이 필요합니다.</string>
+</dict>
+</plist>

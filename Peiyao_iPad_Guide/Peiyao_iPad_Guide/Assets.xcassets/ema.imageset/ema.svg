@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60.92 114.47">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #ffd18d;
+      }
+
+      .cls-1, .cls-2 {
+        stroke: #0c0c0c;
+        stroke-width: .1px;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2 {
+        fill: #fff;
+      }
+
+      .cls-3 {
+        fill: none;
+        stroke: #d00000;
+        stroke-width: .4px;
+      }
+    </style>
+  </defs>
+  <g id="_图层_5" data-name="图层 5">
+    <polygon class="cls-2" points="60.87 79.55 60.87 114.42 .05 114.42 .05 79.55 29.69 62.3 60.87 79.55"/>
+    <circle class="cls-1" cx="29.9" cy="67.38" r="1.83"/>
+    <path class="cls-3" d="M29.69,62.3l-.12,3.31.76.07.04-3s-2.46-10.77-1.91-24.76c.54-13.99,4.89-18.41,3.67-27.54C30.91,1.25,28.33.37,28.33.37"/>
+    <path class="cls-3" d="M34.57.07s7.62,21.72,2.16,32.69c-5.96,11.96-8.3,21.22-7.03,29.55"/>
+  </g>
+</svg>

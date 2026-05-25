@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50.91 40.76">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #050505;
+      }
+
+      .cls-2 {
+        stroke: #262626;
+      }
+
+      .cls-2, .cls-3, .cls-4, .cls-5, .cls-6 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2, .cls-4 {
+        fill: none;
+      }
+
+      .cls-2, .cls-4, .cls-5 {
+        stroke-width: .1px;
+      }
+
+      .cls-3 {
+        stroke-width: .05px;
+      }
+
+      .cls-3, .cls-6 {
+        stroke: #0c0c0c;
+      }
+
+      .cls-3, .cls-6, .cls-7 {
+        fill: #fff;
+      }
+
+      .cls-4 {
+        opacity: .4;
+        stroke: #fff;
+      }
+
+      .cls-8 {
+        font-family: HannotateSC-W5-GBpc-EUC-H, 'Hannotate SC';
+        font-size: 5px;
+      }
+
+      .cls-5 {
+        fill: #f96a53;
+        stroke: #6d6d6d;
+      }
+
+      .cls-6 {
+        stroke-width: .25px;
+      }
+
+      .cls-7 {
+        font-family: SamarkanNormal, Samarkan;
+        font-size: 1.95px;
+      }
+    </style>
+  </defs>
+  <g id="_图层_5" data-name="图层 5">
+    <text class="cls-8" transform="translate(20.43 27.85)"><tspan x="0" y="0">touch </tspan></text>
+  </g>
+  <g id="_图层_7" data-name="图层 7">
+    <rect class="cls-6" x="3.08" y="16.23" width="11.43" height="22.34" rx="1.88" ry="1.88"/>
+  </g>
+  <g id="_图层_8" data-name="图层 8">
+    <circle class="cls-2" cx="8.84" cy="20.19" r="8.79"/>
+    <rect class="cls-1" x="6.73" y="16.97" width="4.22" height=".52" rx=".17" ry=".17"/>
+    <circle class="cls-2" cx="8.84" cy="20.19" r="4.14"/>
+    <circle class="cls-2" cx="8.8" cy="20.03" r="6.51"/>
+  </g>
+  <g id="_图层_9" data-name="图层 9">
+    <line class="cls-3" x1="7.19" y1="10.55" x2="13.44" y2="4.22"/>
+    <line class="cls-3" x1="17.99" y1="22.36" x2="23.61" y2="18.89"/>
+  </g>
+  <g id="_图层_11" data-name="图层 11">
+    <g>
+      <g>
+        <rect class="cls-5" x="16.89" y="1.33" width="12.46" height="15.67" rx="2.08" ry="2.08" transform="translate(-1.56 12.26) rotate(-28.76)"/>
+        <text class="cls-7" transform="translate(18.94 12.21) rotate(-28.76)"><tspan x="0" y="0">make a wish</tspan></text>
+      </g>
+      <circle class="cls-4" cx="23.23" cy="9.38" r="4.43"/>
+    </g>
+  </g>
+</svg>

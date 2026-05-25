@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_2" data-name="图层 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60.92 52.22">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+        opacity: .55;
+        stroke: #0c0c0c;
+        stroke-miterlimit: 10;
+        stroke-width: .1px;
+      }
+    </style>
+  </defs>
+  <g id="_图层_9" data-name="图层 9">
+    <polygon class="cls-1" points="60.87 17.31 60.87 52.17 .05 52.17 .05 17.31 29.69 .06 60.87 17.31"/>
+  </g>
+</svg>
