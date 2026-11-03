@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { DurableObject, env } from "cloudflare:workers";
 
 /**
  * Make a Wish 가이드 서버
@@ -9,7 +9,9 @@ import { env } from "cloudflare:workers";
  *
  *   GET    /                      상태 확인 (인증 없음)
  *   GET    /images/<key>          소원 그림 PNG (인증 없음, 추측 불가능한 UUID 키)
- *   GET    /api/current           currentdata 행 목록            (iPhone/iPad 폴링, 연결 테스트)
+ *   GET    /api/live              WebSocket. 연결 즉시 + currentdata 가 바뀔 때마다 {type:"current", rows} 를 보내 줌
+ *                                 (기기가 1.5초마다 묻지 않아도 되므로 요청 수가 크게 줄어듦. "ping" → "pong")
+ *   GET    /api/current           currentdata 행 목록            (WebSocket 이 안 될 때의 폴링, 연결 테스트)
  *   POST   /api/current           {status}  waiting / unlockwaiting 추가 (iPad)
  *   DELETE /api/current           currentdata 전체 비우기 (iPad 감사 화면, 관리 메뉴)
  *   POST   /api/tag               {nfcId}   waiting → nfctagged / unlockwaiting → unlocknfctagged (iPhone, 단축어)
@@ -122,12 +124,79 @@ const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(",
 
 // ── 핸들러 ─────────────────────────────────────────────────────────
 
-/** GET /api/current */
-async function listCurrent(): Promise<Response> {
+async function currentRows(): Promise<unknown[]> {
 	const { results } = await env.DB.prepare(
 		"SELECT id, status, nfc_id, created_at, updated_at FROM currentdata ORDER BY created_at DESC LIMIT 50",
 	).all();
-	return json({ rows: results });
+	return results;
+}
+
+/** GET /api/current */
+async function listCurrent(): Promise<Response> {
+	return json({ rows: await currentRows() });
+}
+
+// ── 실시간 알림 (Durable Object) ──────────────────────────────────
+/**
+ * 모든 기기의 WebSocket 을 하나의 객체가 붙잡고 있다가, currentdata 가 바뀌면 한꺼번에 알려 줍니다.
+ * Hibernation API 를 쓰므로 연결만 열려 있고 메시지가 없는 동안에는 사용 시간이 과금되지 않습니다.
+ * 앱의 keep-alive "ping" 은 객체를 깨우지 않고 런타임이 바로 "pong" 으로 응답합니다.
+ */
+export class WishHub extends DurableObject {
+	async fetch(request: Request): Promise<Response> {
+		if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+			return error(426, "WebSocket 연결이 필요합니다");
+		}
+		this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+		const { 0: client, 1: server } = new WebSocketPair();
+		this.ctx.acceptWebSocket(server);
+		// 연결하자마자 현재 상태를 보내 줌 (재연결 중에 놓친 변화도 이걸로 맞춰짐)
+		try {
+			await ensureSchema();
+			server.send(JSON.stringify({ type: "current", rows: await currentRows() }));
+		} catch (e) {
+			console.error("initial snapshot failed", e);
+		}
+		return new Response(null, { status: 101, webSocket: client });
+	}
+
+	/** 연결된 모든 기기에 최신 currentdata 전송 */
+	broadcast(rows: unknown[]): number {
+		const message = JSON.stringify({ type: "current", rows });
+		let sent = 0;
+		for (const ws of this.ctx.getWebSockets()) {
+			try {
+				ws.send(message);
+				sent++;
+			} catch {
+				// 이미 끊긴 연결
+			}
+		}
+		return sent;
+	}
+
+	webSocketMessage(): void {
+		// 앱이 보내는 메시지는 "ping" 뿐이고 자동 응답으로 처리됨
+	}
+
+	webSocketClose(ws: WebSocket, code: number, reason: string): void {
+		try {
+			ws.close(code, reason);
+		} catch {
+			// 이미 닫힘
+		}
+	}
+}
+
+// 이름(문자열)으로 자기 자신을 가리키는 바인딩이라 클래스 타입이 추론되지 않아 명시
+const hub = () => (env.HUB as DurableObjectNamespace<WishHub>).getByName("main");
+
+async function notifyChanged(): Promise<void> {
+	try {
+		await hub().broadcast(await currentRows());
+	} catch (e) {
+		console.error("broadcast failed", e);
+	}
 }
 
 /** POST /api/current {status} – 원본 CurrentInsert (status 만 기록) */
@@ -277,42 +346,53 @@ async function image(key: string): Promise<Response> {
 
 // ── 라우터 ─────────────────────────────────────────────────────────
 export default {
-	async fetch(request) {
-		const url = new URL(request.url);
-		const { pathname } = url;
-		const method = request.method;
-
-		try {
-			if (pathname === "/" && method === "GET") {
-				return new Response("Make a Wish server OK\n", { headers: { "content-type": "text/plain" } });
-			}
-			if (pathname.startsWith("/images/") && method === "GET") {
-				return await image(pathname.slice("/images/".length));
-			}
-			if (!pathname.startsWith("/api/")) return error(404, "not found");
-
-			if (!(await authorized(request))) return error(401, "unauthorized");
-			await ensureSchema();
-
-			switch (`${method} ${pathname}`) {
-				case "GET /api/current":
-					return await listCurrent();
-				case "POST /api/current":
-					return await insertCurrent(request);
-				case "DELETE /api/current":
-					return await clearCurrent();
-				case "POST /api/tag":
-					return await tag(request, url);
-				case "POST /api/lock":
-					return await lock(request, url);
-				case "POST /api/unlock":
-					return await unlock();
-				default:
-					return error(404, "not found");
-			}
-		} catch (e) {
-			console.error(`${method} ${pathname} failed`, e);
-			return error(500, "internal error");
+	async fetch(request, _env, ctx) {
+		const response = await route(request);
+		// 상태를 바꾸는 요청이 성공하면 연결된 기기들에 바로 알림
+		if (request.method !== "GET" && response.ok && new URL(request.url).pathname.startsWith("/api/")) {
+			ctx.waitUntil(notifyChanged());
 		}
+		return response;
 	},
-} satisfies ExportedHandler;
+} satisfies ExportedHandler<Env>;
+
+async function route(request: Request): Promise<Response> {
+	const url = new URL(request.url);
+	const { pathname } = url;
+	const method = request.method;
+
+	try {
+		if (pathname === "/" && method === "GET") {
+			return new Response("Make a Wish server OK\n", { headers: { "content-type": "text/plain" } });
+		}
+		if (pathname.startsWith("/images/") && method === "GET") {
+			return await image(pathname.slice("/images/".length));
+		}
+		if (!pathname.startsWith("/api/")) return error(404, "not found");
+
+		if (!(await authorized(request))) return error(401, "unauthorized");
+		await ensureSchema();
+
+		switch (`${method} ${pathname}`) {
+			case "GET /api/live":
+				return await hub().fetch(request);
+			case "GET /api/current":
+				return await listCurrent();
+			case "POST /api/current":
+				return await insertCurrent(request);
+			case "DELETE /api/current":
+				return await clearCurrent();
+			case "POST /api/tag":
+				return await tag(request, url);
+			case "POST /api/lock":
+				return await lock(request, url);
+			case "POST /api/unlock":
+				return await unlock();
+			default:
+				return error(404, "not found");
+		}
+	} catch (e) {
+		console.error(`${method} ${pathname} failed`, e);
+		return error(500, "internal error");
+	}
+}

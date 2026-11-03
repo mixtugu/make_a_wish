@@ -8,15 +8,15 @@ import { colors } from '../theme';
 const OPTIONS: { mode: GuideMode; title: string; device: string; desc: string }[] = [
   {
     mode: 'iphone',
-    title: 'iPhone 가이드',
-    device: 'NFC 안내 화면',
-    desc: '대기 중엔 "Make a Wish" 화면을 띄우고, iPad 에서 소원을 저장하면 소원 종이를 대도록 안내합니다.',
+    title: 'iPhone guide',
+    device: 'NFC prompt screen',
+    desc: 'Shows the "Make a Wish" screen while idle, and asks visitors to hold their wish paper to the phone once a wish is saved on the iPad.',
   },
   {
     mode: 'ipad',
-    title: 'iPad 가이드',
-    device: '소원 작성 키오스크',
-    desc: '언어 선택 → 신분 선택 → 소원 그리기 → 태그 → 다른 사람의 소원 풀기까지 전체 체험을 진행합니다.',
+    title: 'iPad guide',
+    device: 'Wish-writing kiosk',
+    desc: "Runs the full experience: choose language → choose visitor type → draw a wish → tag → untie someone else's wish.",
   },
 ];
 
@@ -32,7 +32,7 @@ export function SetupScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 }]}
     >
       <Text style={styles.title}>Make a Wish</Text>
-      <Text style={styles.subtitle}>이 기기를 어떤 가이드로 사용할까요?</Text>
+      <Text style={styles.subtitle}>Which guide should this device run?</Text>
 
       <View style={styles.cards}>
         {OPTIONS.map((o) => (
@@ -46,7 +46,7 @@ export function SetupScreen() {
             ]}
             accessibilityRole="button"
           >
-            {o.mode === recommended && <Text style={styles.badge}>이 기기에 추천</Text>}
+            {o.mode === recommended && <Text style={styles.badge}>Recommended for this device</Text>}
             <Text style={styles.cardTitle}>{o.title}</Text>
             <Text style={styles.cardDevice}>{o.device}</Text>
             <Text style={styles.cardDesc}>{o.desc}</Text>
@@ -55,8 +55,8 @@ export function SetupScreen() {
       </View>
 
       <Text style={styles.note}>
-        나중에 바꾸려면 화면 <Text style={{ fontWeight: '700' }}>오른쪽 위 모서리를 2초간 길게</Text> 눌러 관리자
-        메뉴 → 설정을 여세요.
+        To change this later, tap the <Text style={{ fontWeight: '700' }}>⚙︎ button in the top-right corner</Text>{' '}
+        (or long-press that corner for 2 seconds if the button is hidden) and choose a guide.
       </Text>
     </ScrollView>
   );

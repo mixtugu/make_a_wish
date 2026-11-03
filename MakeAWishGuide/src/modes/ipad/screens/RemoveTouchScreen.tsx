@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -6,15 +6,16 @@ import { AppText } from '../../../components/AppText';
 import { Footer } from '../../../components/Footer';
 import { SvgAsset } from '../../../components/SvgAsset';
 import { STATUS } from '../../../config/defaults';
-import { usePolling } from '../../../hooks/usePolling';
-import { useScale } from '../../../hooks/useScale';
 import { useApi } from '../../../hooks/useApi';
+import { useScale } from '../../../hooks/useScale';
 import { strings } from '../../../i18n/strings';
-import { findCurrentStatus, transferUnlockToUnlocked } from '../../../services/wishFlow';
-import { useSettings } from '../../../settings/SettingsContext';
+import { useCurrentStatus } from '../../../live/LiveCurrent';
+import { transferUnlockToUnlocked } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import { log } from '../../../utils/log';
 import type { IPadScreenProps } from '../types';
+
+const UNLOCK_TAGGED = [STATUS.unlockNfcTagged] as const;
 
 /**
  * 원본 RemoveTouchView
@@ -24,30 +25,26 @@ import type { IPadScreenProps } from '../types';
 export function RemoveTouchScreen({ session, go }: IPadScreenProps) {
   const { scale: sc, s, height } = useScale(IPAD_DESIGN);
   const insets = useSafeAreaInsets();
-  const { settings } = useSettings();
   const db = useApi();
   const { lang, nationality } = session;
   const handled = useRef(false);
+  const tagged = useCurrentStatus(UNLOCK_TAGGED);
 
-  usePolling(
-    async () => {
-      if (handled.current) return true;
-      const found = await findCurrentStatus(db, [STATUS.unlockNfcTagged]);
-      if (!found) return false;
-      handled.current = true;
-      log('removeTouch', 'unlocknfctagged 감지 → unlockeddata 로 이관');
-      try {
-        await transferUnlockToUnlocked(db);
-      } catch (e) {
-        log('removeTouch', '이관 실패', e);
-      }
-      go('unlocked');
-      return true;
-    },
-    settings.pollIntervalMs,
-    true,
-    'removeTouch',
-  );
+  const onTagged = useEffectEvent(async () => {
+    if (handled.current) return;
+    handled.current = true;
+    log('removeTouch', 'unlocknfctagged 감지 → unlockeddata 로 이관');
+    try {
+      await transferUnlockToUnlocked(db);
+    } catch (e) {
+      log('removeTouch', '이관 실패', e);
+    }
+    go('unlocked');
+  });
+
+  useEffect(() => {
+    if (tagged) onTagged();
+  }, [tagged]);
 
   const image =
     nationality === 'japanese'

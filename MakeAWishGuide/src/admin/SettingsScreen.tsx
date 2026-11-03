@@ -63,29 +63,29 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
       setTestState({
         busy: false,
         ok: true,
-        message: `연결 성공 · currentdata ${rows.length}건${rows.length ? ` (${rows.map((r) => r.status).join(', ')})` : ''}`,
+        message: `Connected · currentdata: ${rows.length} row(s)${rows.length ? ` (${rows.map((r) => r.status).join(', ')})` : ''}`,
       });
     } catch (e) {
       let msg = String(e);
       if (e instanceof ApiError) {
-        msg = e.status === 401 ? '토큰이 맞지 않습니다 (HTTP 401)' : `${e.message}\n${e.body.slice(0, 200)}`;
+        msg = e.status === 401 ? 'Invalid token (HTTP 401)' : `${e.message}\n${e.body.slice(0, 200)}`;
       }
-      setTestState({ busy: false, ok: false, message: `연결 실패: ${msg}` });
+      setTestState({ busy: false, ok: false, message: `Connection failed: ${msg}` });
     }
   };
 
   const confirmClear = () => {
-    Alert.alert('currentdata 비우기', '진행 중인 모든 상태(waiting / nfctagged 등)를 삭제합니다. 계속할까요?', [
-      { text: '취소', style: 'cancel' },
+    Alert.alert('Clear currentdata', 'This deletes every in-progress state (waiting, nfctagged, etc.). Continue?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: '삭제',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
             await clearCurrentData(db());
-            Alert.alert('완료', 'currentdata 를 비웠습니다.');
+            Alert.alert('Done', 'currentdata has been cleared.');
           } catch (e) {
-            Alert.alert('실패', String(e));
+            Alert.alert('Failed', String(e));
           }
         },
       },
@@ -93,10 +93,10 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
   };
 
   const confirmReset = () => {
-    Alert.alert('설정 초기화', '모든 설정을 기본값으로 되돌립니다.', [
-      { text: '취소', style: 'cancel' },
+    Alert.alert('Reset settings', 'All settings will return to their defaults.', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: '초기화',
+        text: 'Reset',
         style: 'destructive',
         onPress: async () => {
           await reset();
@@ -117,39 +117,39 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <Pressable onPress={onClose} hitSlop={12}>
-            <Text style={styles.headerAction}>취소</Text>
+            <Text style={styles.headerAction}>Cancel</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>설정</Text>
+          <Text style={styles.headerTitle}>Settings</Text>
           <Pressable onPress={save} hitSlop={12}>
-            <Text style={[styles.headerAction, { fontWeight: '700' }]}>저장</Text>
+            <Text style={[styles.headerAction, { fontWeight: '700' }]}>Save</Text>
           </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
-          <Section title="가이드 모드" footer={`이 기기는 ${isTabletDevice ? 'iPad' : 'iPhone'} 입니다. 저장하면 바로 ${resolved === 'ipad' ? 'iPad' : 'iPhone'} 가이드로 전환됩니다.`}>
+          <Section title="Guide mode" footer={`This device is an ${isTabletDevice ? 'iPad' : 'iPhone'}. Saving switches to the ${resolved === 'ipad' ? 'iPad' : 'iPhone'} guide right away.`}>
             <Segmented<GuideModeSetting>
               value={draft.mode}
               onChange={(v) => set('mode', v)}
               options={[
-                { value: 'auto', label: `자동 (${isTabletDevice ? 'iPad' : 'iPhone'})` },
-                { value: 'iphone', label: 'iPhone 가이드' },
-                { value: 'ipad', label: 'iPad 가이드' },
+                { value: 'auto', label: `Auto (${isTabletDevice ? 'iPad' : 'iPhone'})` },
+                { value: 'iphone', label: 'iPhone guide' },
+                { value: 'ipad', label: 'iPad guide' },
               ]}
             />
           </Section>
 
           {resolved === 'ipad' && (
-            <Section title="iPad 가이드">
-              <Text style={styles.label}>처음 선택되어 있는 언어</Text>
+            <Section title="iPad guide">
+              <Text style={styles.label}>Default language</Text>
               <Segmented
                 value={draft.defaultLanguage}
                 onChange={(v) => set('defaultLanguage', v)}
                 options={LANGUAGES.map((l) => ({ value: l, label: LANGUAGE_META[l].title }))}
               />
-              <Row label="마지막 방문자의 언어 유지" hint="원본 앱 동작. 끄면 항상 위의 언어로 시작합니다.">
+              <Row label="Keep last visitor's language" hint="Original app behavior. When off, every visit starts in the language above.">
                 <Switch value={draft.rememberLastLanguage} onValueChange={(v) => set('rememberLastLanguage', v)} />
               </Row>
-              <Row label="입력 없으면 처음으로 (초)" hint="0 = 사용 안 함. 관람객이 중간에 떠난 경우 대비.">
+              <Row label="Return to start when idle (sec)" hint="0 = off. Useful when a visitor walks away midway.">
                 <NumberInput value={draft.idleResetSeconds} onChange={(v) => set('idleResetSeconds', v)} />
               </Row>
             </Section>
@@ -157,20 +157,20 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
 
           {resolved === 'iphone' && (
             <Section
-              title="iPhone 가이드"
+              title="iPhone guide"
               footer={
-                '끄면(기본) 원본 앱처럼 외부(단축어 자동화 등)가 currentdata 상태를 nfctagged / unlocknfctagged 로 바꿔 준다고 가정합니다.\n' +
-                '켜면 NFC 안내 화면에서 앱이 직접 태그 UID 를 읽어 상태와 nfc_id 를 기록합니다.'
+                'Off (default): like the original app, something outside the app (e.g. a Shortcuts automation) changes currentdata to nfctagged / unlocknfctagged.\n' +
+                'On: the app reads the tag UID itself on the NFC screen and records the status and nfc_id.'
               }
             >
               <Row
-                label="앱에서 NFC 태그 직접 읽기"
+                label="Read NFC tags in the app"
                 hint={
                   nfcAvailable === null
-                    ? '확인 중…'
+                    ? 'Checking…'
                     : nfcAvailable
-                      ? '이 기기에서 NFC 사용 가능'
-                      : 'NFC 사용 불가 (Expo Go 이거나 NFC 미지원 기기 – 개발 빌드 필요)'
+                      ? 'NFC is available on this device'
+                      : 'NFC unavailable (Expo Go or unsupported device – needs a development build)'
                 }
               >
                 <Switch value={draft.nfcInAppScan} onValueChange={(v) => set('nfcInAppScan', v)} />
@@ -178,17 +178,29 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
             </Section>
           )}
 
-          <Section title="공통">
-            <Row label="화면 꺼짐 방지" hint="전시용으로 켜 두는 것을 권장합니다.">
+          <Section title="General">
+            <Row label="Show settings (⚙︎) button" hint="Recommended off during the exhibition. When off, long-press the top-right corner for 2 seconds to open the menu.">
+              <Switch value={draft.showSettingsButton} onValueChange={(v) => set('showSettingsButton', v)} />
+            </Row>
+            <Row label="Keep screen awake" hint="Recommended on for exhibitions.">
               <Switch value={draft.keepAwake} onValueChange={(v) => set('keepAwake', v)} />
             </Row>
-            <Row label="상태 확인 주기 (ms)" hint="원본: 1500ms · 500~10000">
+            <Row
+              label="Real-time updates"
+              hint="Recommended. The server pushes changes instantly over one connection, using far fewer requests than checking every few seconds."
+            >
+              <Switch value={draft.liveUpdates} onValueChange={(v) => set('liveUpdates', v)} />
+            </Row>
+            <Row
+              label="Fallback check interval (ms)"
+              hint="Used only while real-time updates are off or unavailable. Original: 1500ms · 500–10000"
+            >
               <NumberInput value={draft.pollIntervalMs} onChange={(v) => set('pollIntervalMs', v)} />
             </Row>
           </Section>
 
-          <Section title="서버 (Cloudflare)" footer="iPhone 과 iPad 는 반드시 같은 서버 주소와 토큰을 써야 합니다.">
-            <Text style={styles.label}>서버 주소</Text>
+          <Section title="Server (Cloudflare)" footer="The iPhone and iPad must use the same server URL and token.">
+            <Text style={styles.label}>Server URL</Text>
             <TextInput
               style={styles.input}
               value={draft.serverUrl}
@@ -198,7 +210,7 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
               keyboardType="url"
               placeholder="https://make-a-wish-server.xxxx.workers.dev"
             />
-            <Text style={styles.label}>API 토큰</Text>
+            <Text style={styles.label}>API token</Text>
             <TextInput
               style={styles.input}
               value={draft.apiToken}
@@ -208,9 +220,9 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
               secureTextEntry
             />
             <View style={styles.buttonRow}>
-              <SmallButton label="연결 테스트" onPress={testConnection} disabled={testState.busy} />
+              <SmallButton label="Test connection" onPress={testConnection} disabled={testState.busy} />
               <SmallButton
-                label="기본값으로"
+                label="Use defaults"
                 onPress={() =>
                   setDraft((d) => ({
                     ...d,
@@ -229,10 +241,10 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
             )}
           </Section>
 
-          <Section title="관리">
+          <Section title="Maintenance">
             <View style={styles.buttonRow}>
-              <SmallButton label="currentdata 비우기" onPress={confirmClear} danger />
-              <SmallButton label="설정 초기화" onPress={confirmReset} subtle />
+              <SmallButton label="Clear currentdata" onPress={confirmClear} danger />
+              <SmallButton label="Reset settings" onPress={confirmReset} subtle />
             </View>
           </Section>
         </ScrollView>

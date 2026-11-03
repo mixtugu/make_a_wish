@@ -7,6 +7,7 @@ iPhone·iPad 가이드 앱([`../MakeAWishGuide`](../MakeAWishGuide))이 함께 �
 | **Worker** (`src/index.ts`) | API. 상태 전환과 테이블 이관을 트랜잭션으로 처리 |
 | **D1** `make-a-wish-db` | `currentdata` / `lockeddata` / `unlockeddata` 테이블 (첫 요청 때 자동 생성) |
 | **R2** `make-a-wish-drawings` | 소원 그림 PNG |
+| **Durable Object** `WishHub` | 기기들의 WebSocket 연결을 유지하다가 상태가 바뀌면 바로 알려 줌 (기기가 계속 물어보지 않아도 됨) |
 | **Secret** `API_TOKEN` | 앱과 공유하는 접근 토큰 |
 
 ## 배포 (Windows 에서 그대로 가능)
@@ -44,7 +45,8 @@ npm run typecheck
 
 | 요청 | 하는 일 | 호출하는 곳 |
 | --- | --- | --- |
-| `GET /api/current` | currentdata 행 목록 (최신순) | iPhone·iPad 폴링, 연결 테스트 |
+| `GET /api/live` (WebSocket) | 연결 즉시, 그리고 currentdata 가 바뀔 때마다 `{"type":"current","rows":[…]}` 전송. `ping` → `pong` | iPhone·iPad (기본) |
+| `GET /api/current` | currentdata 행 목록 (최신순) | 실시간 연결이 안 될 때의 폴링, 2분마다 확인, 연결 테스트 |
 | `POST /api/current` `{"status":"waiting"}` | waiting / unlockwaiting 추가 | iPad (소원 완료 / Tap to Continue) |
 | `POST /api/tag` `{"nfcId":"04A1B2C3"}` | 가장 최근 waiting → nfctagged, unlockwaiting → unlocknfctagged | iPhone 앱(NFC 직접 읽기) 또는 단축어 |
 | `POST /api/lock` (본문: PNG) | nfctagged 행 + 그림 → lockeddata, currentdata 정리 | iPad (종이 태그 감지 후) |
@@ -54,13 +56,29 @@ npm run typecheck
 
 ### 단축어로 태그 처리하기 (앱의 NFC 직접 읽기를 끈 경우)
 
-iPhone **단축어 → 자동화 → NFC** 에서 종이 태그마다 자동화를 만들고, 동작으로
-**URL 콘텐츠 가져오기**를 추가합니다.
+1. **공통 단축어 하나** (`Make a Wish 태그`): 동작 **URL 콘텐츠 가져오기**
+   - URL: `https://make-a-wish-server.<계정>.workers.dev/api/tag`
+   - 방법: `POST`, 헤더: `Authorization` = `Bearer <API_TOKEN>`
+   - 요청 본문: JSON, `nfcId` = **단축어 입력**
+2. **종이 태그마다 자동화** (단축어 → 자동화 → NFC → 태그 스캔, *즉시 실행*):
+   동작 **텍스트** (`paper1` 처럼 종이마다 다른 값) → **단축어 실행** (`Make a Wish 태그`, 입력 = 텍스트)
 
-- URL: `https://make-a-wish-server.<계정>.workers.dev/api/tag`
-- 방법: `POST`
-- 헤더: `Authorization` = `Bearer <API_TOKEN>`
-- 본문(JSON): `nfcId` = 그 태그를 구분할 값 (예: 종이 번호)
+같은 종이는 묶을 때와 풀 때 같은 `nfcId` 를 보내므로, 풀 때 그 종이에 묶였던 소원을 찾아 옮깁니다.
+주소·토큰이 바뀌면 공통 단축어 하나만 고치면 됩니다.
+
+PC 에서 테스트:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri https://make-a-wish-server.<계정>.workers.dev/api/tag `
+  -Headers @{ Authorization = "Bearer <API_TOKEN>" } -ContentType 'application/json' -Body '{"nfcId":"paper1"}'
+```
+
+## 사용량 (무료 플랜 기준 추정)
+
+기기는 WebSocket 하나로 변화를 기다리므로, 1.5초마다 묻던 원본 방식(기기당 하루 최대 약 5만 8천 건)과 달리
+기기당 하루 요청이 **수천 건 이하**입니다 (keep-alive ping 45초마다, 확인 요청 2분마다, 그 외엔 실제 변화가 있을 때만).
+연결이 쉬는 동안 Durable Object 는 hibernation 상태라 사용 시간이 과금되지 않고, 서버가 보내는 메시지는 무료입니다.
+무료 한도를 넘더라도 요금이 아니라 오류가 나며, 매일 09:00(KST) 에 초기화됩니다.
 
 ## 데이터 확인
 

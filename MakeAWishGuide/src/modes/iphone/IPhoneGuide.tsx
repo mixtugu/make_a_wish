@@ -4,12 +4,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SvgAsset, svgRatio } from '../../components/SvgAsset';
 import { STATUS } from '../../config/defaults';
 import { chalkduster } from '../../fonts';
-import { usePolling } from '../../hooks/usePolling';
-import { useScale } from '../../hooks/useScale';
 import { useApi } from '../../hooks/useApi';
+import { useScale } from '../../hooks/useScale';
 import { iphoneStrings } from '../../i18n/strings';
+import { useCurrentStatus } from '../../live/LiveCurrent';
 import { failNfc, finishNfc, isNfcAvailable, readTagId } from '../../services/nfc';
-import { findCurrentStatus, markTagged } from '../../services/wishFlow';
+import { markTagged } from '../../services/wishFlow';
 import { useSettings } from '../../settings/SettingsContext';
 import { colors, IPHONE_DESIGN } from '../../theme';
 
@@ -20,21 +20,11 @@ type ActiveStatus = typeof STATUS.waiting | typeof STATUS.unlockWaiting;
  * - currentdata 에 waiting / unlockwaiting 행이 있으면 NFC 안내 화면
  * - 없어지면(태그 처리 완료) 메인 화면으로 복귀
  */
+const ACTIVE_STATUSES = [STATUS.waiting, STATUS.unlockWaiting] as const;
+
 export function IPhoneGuide() {
-  const { settings } = useSettings();
-  const db = useApi();
-  const [status, setStatus] = useState<ActiveStatus | null>(null);
-
-  usePolling(
-    async () => {
-      const s = await findCurrentStatus(db, [STATUS.waiting, STATUS.unlockWaiting]);
-      setStatus(s === STATUS.waiting || s === STATUS.unlockWaiting ? s : null);
-    },
-    settings.pollIntervalMs,
-    true,
-    'iphone',
-  );
-
+  // 서버가 실시간으로 알려 주는 currentdata 기준 (LiveCurrentProvider)
+  const status = useCurrentStatus(ACTIVE_STATUSES) as ActiveStatus | null;
   return status ? <NfcScreen status={status} /> : <IdleScreen />;
 }
 
@@ -105,9 +95,9 @@ function NfcScreen({ status }: { status: ActiveStatus }) {
       // 서버가 태그 순간의 실제 상태(waiting / unlockwaiting)를 기준으로 갱신
       const n = await markTagged(db, id);
       if (n > 0) await finishNfc('✓ make a wish');
-      else await failNfc('이미 처리되었습니다');
+      else await failNfc('Already processed');
     } catch {
-      await failNfc('서버 연결 실패 – 다시 시도해 주세요');
+      await failNfc('Could not reach the server – please try again');
     }
     if (mounted.current) setScan('idle');
   }, [db, settings.nfcInAppScan]);
@@ -158,11 +148,11 @@ function NfcScreen({ status }: { status: ActiveStatus }) {
       </View>
       <MakeAWishCircle title={iphoneStrings.circleTitle} s={s} />
       {scan === 'idle' && (
-        <Text style={[styles.hint, { fontSize: 15 * s }]}>화면을 탭하면 NFC 스캔을 시작합니다</Text>
+        <Text style={[styles.hint, { fontSize: 15 * s }]}>Tap the screen to start an NFC scan</Text>
       )}
       {scan === 'unavailable' && (
         <Text style={[styles.hint, { fontSize: 13 * s }]}>
-          이 기기/빌드에서는 NFC 를 사용할 수 없습니다 (개발 빌드 필요)
+          NFC is not available on this device/build (needs a development build)
         </Text>
       )}
     </Pressable>

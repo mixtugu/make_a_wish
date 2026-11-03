@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Mac 스크립트 설정 (Expo 토큰 등)
+mac/config.env
+
 # typescript
 *.tsbuildinfo
 

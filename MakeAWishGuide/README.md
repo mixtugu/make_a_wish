@@ -21,6 +21,9 @@ npx expo start            # Expo Go 로 바로 확인 (NFC 직접 읽기 제외 
 
 > Windows 에서는 iOS 네이티브 빌드를 할 수 없으므로 **EAS 클라우드 빌드**를 쓰세요 (아래 4번).
 
+**전시용으로 Mac 을 Expo 서버로 쓰려면** [`mac/`](mac/README.md) 의 스크립트를 사용하세요.
+초기 설치와 시작/종료를 더블클릭으로 할 수 있고, 켜져 있는 동안은 백그라운드에서 계속 실행됩니다.
+
 ## 2. 모드(버전) 설정
 
 - **최초 실행** 시 "이 기기를 어떤 가이드로 사용할까요?" 화면이 나오고, 기기에 맞는 쪽이 추천 표시됩니다.
@@ -33,7 +36,8 @@ npx expo start            # Expo Go 로 바로 확인 (NFC 직접 읽기 제외 
 | --- | --- | --- |
 | 공통 | 가이드 모드 (자동 / iPhone / iPad) | 자동 = iPad 면 iPad 가이드 |
 | 공통 | 화면 꺼짐 방지 | 켜짐 |
-| 공통 | 상태 확인 주기 | 1500ms (원본과 동일) |
+| 공통 | 실시간 업데이트 (WebSocket) | 켜짐 |
+| 공통 | 실시간 연결이 없을 때의 확인 주기 | 1500ms (원본과 동일) |
 | 공통 | 서버 주소 / API 토큰, **연결 테스트** | `.env.local` 값 |
 | iPad | 처음 선택된 언어 | 日本語 |
 | iPad | 마지막 방문자의 언어 유지 | 켜짐 (원본 동작) |
@@ -52,6 +56,10 @@ npx expo start            # Expo Go 로 바로 확인 (NFC 직접 읽기 제외 
 3. iPhone 과 iPad 가 **같은 주소·토큰**을 쓰는지 확인
 
 > `.env.local` 에 넣은 토큰은 앱 안에 그대로 들어갑니다. 전시용 공유 토큰으로만 쓰고, 유출되면 서버에서 바꾸세요.
+
+기기들은 서버와 **WebSocket 하나**로 연결되어, 상태가 바뀌면 서버가 바로 알려 줍니다 (원본처럼 1.5초마다 묻지 않음).
+연결이 안 되는 환경에서는 자동으로 주기적 확인으로 바뀌고, 다시 연결되면 복귀합니다.
+현재 연결 상태는 ⚙︎ 메뉴의 `Server:` 줄에서 볼 수 있고, 설정의 *Real-time updates* 로 끌 수 있습니다.
 
 ### 데이터 흐름 (원본과 동일)
 
@@ -98,6 +106,7 @@ src/
   fonts.ts                      언어별 폰트 (원본 FontManager)
   services/api.ts               Make a Wish 서버(Cloudflare Worker) 클라이언트
   services/wishFlow.ts          단계별 서버 호출 (원본 각 View 의 네트워크 코드)
+  live/LiveCurrent.tsx          서버 상태 실시간 수신 (WebSocket, 끊기면 폴링으로 대체)
   services/nfc.ts               NFC 태그 UID 읽기 (선택)
   components/DrawingCanvas.tsx  PencilKit 대체 드로잉 캔버스 (Skia)
   modes/iphone/IPhoneGuide.tsx  iPhone 가이드

@@ -10,6 +10,7 @@ import { AdminMenu } from './src/admin/AdminMenu';
 import { SettingsScreen } from './src/admin/SettingsScreen';
 import { SetupScreen } from './src/admin/SetupScreen';
 import { useGuideFonts } from './src/fonts';
+import { LiveCurrentProvider } from './src/live/LiveCurrent';
 import { IPadGuide } from './src/modes/ipad/IPadGuide';
 import { IPhoneGuide } from './src/modes/iphone/IPhoneGuide';
 import { SettingsProvider, useSettings } from './src/settings/SettingsContext';
@@ -57,28 +58,31 @@ function Root() {
   if (!settings.setupDone) return <SetupScreen />;
 
   return (
-    <View style={styles.root}>
-      {settings.keepAwake && <KeepAwake />}
-      {resolvedMode === 'ipad' ? (
-        <IPadGuide key={`ipad-${sessionKey}`} />
-      ) : (
-        <IPhoneGuide key={`iphone-${sessionKey}`} />
-      )}
-      <AdminHotspot onOpen={() => setMenuOpen(true)} />
-      <AdminMenu
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onRestart={restart}
-        onOpenSettings={openSettings}
-      />
-      {settingsOpen && (
-        <SettingsScreen
-          onClose={() => setSettingsOpen(false)}
-          // 저장하면 가이드를 처음부터 다시 시작해 새 설정(언어/서버 등)을 반영
-          onSaved={restart}
+    // 서버 상태를 실시간으로 받는 연결 하나를 앱 전체가 공유
+    <LiveCurrentProvider>
+      <View style={styles.root}>
+        {settings.keepAwake && <KeepAwake />}
+        {resolvedMode === 'ipad' ? (
+          <IPadGuide key={`ipad-${sessionKey}`} />
+        ) : (
+          <IPhoneGuide key={`iphone-${sessionKey}`} />
+        )}
+        <AdminHotspot onOpen={() => setMenuOpen(true)} visible={settings.showSettingsButton} />
+        <AdminMenu
+          visible={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          onRestart={restart}
+          onOpenSettings={openSettings}
         />
-      )}
-    </View>
+        {settingsOpen && (
+          <SettingsScreen
+            onClose={() => setSettingsOpen(false)}
+            // 저장하면 가이드를 처음부터 다시 시작해 새 설정(언어/서버 등)을 반영
+            onSaved={restart}
+          />
+        )}
+      </View>
+    </LiveCurrentProvider>
   );
 }
 

@@ -20,16 +20,6 @@ export async function insertStatus(api: ApiClient, status: string): Promise<void
   log(TAG, `currentdata 에 ${status} 추가`);
 }
 
-/** status 가 주어진 값 중 하나인 가장 최근 currentdata 행의 status */
-export async function findCurrentStatus(api: ApiClient, statuses: string[]): Promise<string | null> {
-  const rows = await api.listCurrent();
-  for (const row of rows) {
-    const s = row.status?.toLowerCase();
-    if (s && statuses.includes(s)) return s;
-  }
-  return null;
-}
-
 /** 원본 SavedNextView.transferNfcTaggedAndClear() */
 export async function transferTaggedToLocked(api: ApiClient, image: Uint8Array | null): Promise<void> {
   const { moved, imageUrl } = await api.lock(image);

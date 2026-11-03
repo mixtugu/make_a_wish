@@ -39,7 +39,7 @@ async function request<T>(
   path: string,
   body?: Uint8Array | Record<string, unknown>,
 ): Promise<T> {
-  if (!cfg.url) throw new ApiError('서버 주소가 설정되지 않았습니다', 0, '');
+  if (!cfg.url) throw new ApiError('Server URL is not set', 0, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const headers: Record<string, string> = {

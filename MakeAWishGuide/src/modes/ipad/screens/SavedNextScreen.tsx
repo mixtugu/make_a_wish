@@ -1,19 +1,20 @@
-import { useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
 import { AppText } from '../../../components/AppText';
 import { Footer } from '../../../components/Footer';
 import { SvgAsset } from '../../../components/SvgAsset';
 import { STATUS } from '../../../config/defaults';
-import { usePolling } from '../../../hooks/usePolling';
-import { useScale } from '../../../hooks/useScale';
 import { useApi } from '../../../hooks/useApi';
+import { useScale } from '../../../hooks/useScale';
 import { strings } from '../../../i18n/strings';
-import { findCurrentStatus, transferTaggedToLocked } from '../../../services/wishFlow';
-import { useSettings } from '../../../settings/SettingsContext';
+import { useCurrentStatus } from '../../../live/LiveCurrent';
+import { transferTaggedToLocked } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import { log } from '../../../utils/log';
 import type { IPadScreenProps } from '../types';
+
+const TAGGED = [STATUS.nfcTagged] as const;
 
 /**
  * 원본 SavedNextView
@@ -22,30 +23,26 @@ import type { IPadScreenProps } from '../types';
  */
 export function SavedNextScreen({ session, go }: IPadScreenProps) {
   const { scale: sc, s } = useScale(IPAD_DESIGN);
-  const { settings } = useSettings();
   const db = useApi();
   const { lang, nationality, drawing } = session;
   const handled = useRef(false);
+  const tagged = useCurrentStatus(TAGGED);
 
-  usePolling(
-    async () => {
-      if (handled.current) return true;
-      const found = await findCurrentStatus(db, [STATUS.nfcTagged]);
-      if (!found) return false;
-      handled.current = true;
-      log('savedNext', 'nfctagged 감지 → lockeddata 로 이관');
-      try {
-        await transferTaggedToLocked(db, drawing?.bytes ?? null);
-      } catch (e) {
-        log('savedNext', '이관 실패', e);
-      }
-      go('attach');
-      return true;
-    },
-    settings.pollIntervalMs,
-    true,
-    'savedNext',
-  );
+  const onTagged = useEffectEvent(async () => {
+    if (handled.current) return;
+    handled.current = true;
+    log('savedNext', 'nfctagged 감지 → lockeddata 로 이관');
+    try {
+      await transferTaggedToLocked(db, drawing?.bytes ?? null);
+    } catch (e) {
+      log('savedNext', '이관 실패', e);
+    }
+    go('attach');
+  });
+
+  useEffect(() => {
+    if (tagged) onTagged();
+  }, [tagged]);
 
   const nfcImage =
     nationality === 'japanese' ? 'nfctouchj' : nationality === 'foreignResident' ? 'nfctouchf' : 'nfctouch';

@@ -1,7 +1,14 @@
 import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 
+import { useLiveTransport, type LiveTransport } from '../live/LiveCurrent';
 import { useSettings } from '../settings/SettingsContext';
 import { colors } from '../theme';
+
+const TRANSPORT_LABEL: Record<LiveTransport, string> = {
+  live: 'connected (real-time)',
+  polling: 'checking periodically (real-time unavailable)',
+  off: 'not connected',
+};
 
 interface Props {
   visible: boolean;
@@ -11,24 +18,36 @@ interface Props {
 }
 
 export function AdminMenu({ visible, onClose, onRestart, onOpenSettings }: Props) {
-  const { resolvedMode } = useSettings();
+  const { resolvedMode, update } = useSettings();
+  const transport = useLiveTransport();
+  const other = resolvedMode === 'ipad' ? 'iphone' : 'ipad';
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait']}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
-          <Text style={styles.title}>관리자 메뉴</Text>
+          <Text style={styles.title}>Admin menu</Text>
           <Text style={styles.subtitle}>
-            현재 모드: {resolvedMode === 'ipad' ? 'iPad 가이드 (소원 작성)' : 'iPhone 가이드 (NFC 안내)'}
+            Current mode: {resolvedMode === 'ipad' ? 'iPad guide (wish writing)' : 'iPhone guide (NFC prompt)'}
+            {'\n'}
+            Server: {TRANSPORT_LABEL[transport]}
           </Text>
           <MenuButton
-            label={resolvedMode === 'ipad' ? '처음 화면(언어 선택)으로' : '메인 화면으로'}
+            label={resolvedMode === 'ipad' ? 'Back to start (language)' : 'Back to main screen'}
             onPress={() => {
               onRestart();
               onClose();
             }}
           />
-          <MenuButton label="설정" onPress={onOpenSettings} />
-          <MenuButton label="닫기" onPress={onClose} subtle />
+          <MenuButton
+            label={other === 'iphone' ? 'Switch to iPhone guide' : 'Switch to iPad guide'}
+            onPress={async () => {
+              await update({ mode: other });
+              onRestart();
+              onClose();
+            }}
+          />
+          <MenuButton label="Settings" onPress={onOpenSettings} />
+          <MenuButton label="Close" onPress={onClose} subtle />
         </Pressable>
       </Pressable>
     </Modal>

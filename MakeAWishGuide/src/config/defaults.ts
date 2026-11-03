@@ -16,7 +16,9 @@ export interface AppSettings {
    */
   serverUrl: string;
   apiToken: string;
-  /** 상태 확인 주기(ms). 원본은 1.5초 */
+  /** 실시간 연결(WebSocket)로 상태 변화를 받음. 끄면 원본처럼 주기적으로 물어봄 */
+  liveUpdates: boolean;
+  /** 실시간 연결이 없을 때의 상태 확인 주기(ms). 원본은 1.5초 */
   pollIntervalMs: number;
   /** iPad: 언어 선택 화면에서 처음 선택되어 있는 언어 */
   defaultLanguage: AppLanguage;
@@ -27,6 +29,8 @@ export interface AppSettings {
    * 끄면(기본값) 원본처럼 외부(단축어 자동화 등)가 상태를 바꿔 준다고 가정합니다.
    */
   nfcInAppScan: boolean;
+  /** 오른쪽 위 설정(⚙︎) 버튼 표시. 끄면 그 자리를 2초간 길게 눌러야 메뉴가 열림 */
+  showSettingsButton: boolean;
   /** 전시용: 화면 꺼짐 방지 */
   keepAwake: boolean;
   /** iPad: 진행 중 아무 입력이 없으면 처음 화면으로 돌아갈 시간(초). 0 = 사용 안 함 */
@@ -38,10 +42,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'auto',
   serverUrl: (process.env.EXPO_PUBLIC_SERVER_URL ?? '').trim().replace(/\/+$/, ''),
   apiToken: (process.env.EXPO_PUBLIC_API_TOKEN ?? '').trim(),
+  liveUpdates: true,
   pollIntervalMs: 1500,
   defaultLanguage: 'ja',
   rememberLastLanguage: true,
   nfcInAppScan: false,
+  showSettingsButton: true,
   keepAwake: true,
   idleResetSeconds: 0,
 };

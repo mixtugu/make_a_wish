@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 
 import { log } from '../utils/log';
 
@@ -11,6 +11,13 @@ type NfcModule = typeof import('react-native-nfc-manager');
 let mod: NfcModule | null | undefined;
 function nfc(): NfcModule | null {
   if (mod !== undefined) return mod;
+  // 네이티브 모듈이 없으면(Expo Go) 패키지를 아예 불러오지 않음 – 불러오는 순간 오류를 던지고 개발 화면에 빨간 오류가 뜸
+  const native = TurboModuleRegistry.get('NfcManager') ?? NativeModules.NfcManager;
+  if (!native) {
+    log('nfc', 'NFC native module not found (Expo Go?) – in-app NFC disabled');
+    mod = null;
+    return mod;
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('react-native-nfc-manager') as NfcModule;
