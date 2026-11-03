@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Make a Wish",
+    "slug": "make-a-wish-guide",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFD18D",
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "bundleIdentifier": "assignment.Peiyao-Guide",
+      "appleTeamId": "YC76GD2A26"
+    },
+    "android": {
+      "package": "assignment.peiyao.guide",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFD18D",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "react-native-nfc-manager",
+        {
+          "nfcPermission": "소원 종이(NFC 태그)를 확인하기 위해 NFC 스캔이 필요합니다.",
+          "includeNdefEntitlement": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFD18D",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220
+        }
+      ]
+    ]
+  }
+}

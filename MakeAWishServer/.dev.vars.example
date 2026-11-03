@@ -1,0 +1,2 @@
+# 로컬 개발(npm run dev)용 비밀값. 이 파일을 .dev.vars 로 복사해서 사용하세요.
+API_TOKEN=dev-token
