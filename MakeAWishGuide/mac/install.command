@@ -27,18 +27,28 @@ node_ok() {
   major="${v%%.*}"
   minor="${v#*.}"
   minor="${minor%%.*}"
-  [ "$major" -gt "$MIN_NODE_MAJOR" ] || { [ "$major" -eq "$MIN_NODE_MAJOR" ] && [ "$minor" -ge "$MIN_NODE_MINOR" ]; }
+  case "$major" in
+    22) [ "$minor" -ge 13 ] ;;
+    24) [ "$minor" -ge 3 ] ;;
+    *) [ "$major" -ge 26 ] ;;
+  esac
 }
 
 if ! node_ok; then
   if command -v node >/dev/null 2>&1; then
-    echo "  설치된 Node.js $(node -v) 는 너무 오래되었습니다 (필요: $MIN_NODE_MAJOR.$MIN_NODE_MINOR 이상)."
+    echo "  설치된 Node.js $(node -v) 는 Expo 가 지원하지 않는 버전입니다 (필요: $NODE_REQUIREMENT)."
   else
     echo "  Node.js 가 없습니다."
   fi
   if command -v brew >/dev/null 2>&1; then
-    if ask_yes "  Homebrew 로 Node.js 를 설치할까요?" y; then
-      brew install node || brew upgrade node
+    if ask_yes "  Homebrew 로 Node.js 를 설치/업데이트할까요?" y; then
+      # 이미 설치돼 있으면 brew install 은 아무것도 안 하고 성공하므로 upgrade 를 따로 실행
+      if brew list --versions node >/dev/null 2>&1; then
+        brew upgrade node
+      else
+        brew install node
+      fi
+      hash -r
     fi
   fi
   if ! node_ok; then

@@ -12,8 +12,8 @@ LOG_FILE="$LOG_DIR/expo.log"
 CONFIG_FILE="$MAC_DIR/config.env"                    # Node 경로, Expo 토큰 (git 에 올리지 않음)
 PORT=8081
 DOMAIN="gui/$(id -u)"
-MIN_NODE_MAJOR=22
-MIN_NODE_MINOR=13
+# Expo SDK 58 이 지원하는 Node: ^22.13.0 || ^24.3.0 || >=26 (23·25 같은 홀수 버전은 안 됨)
+NODE_REQUIREMENT="22.13 이상의 22, 24.3 이상의 24, 또는 26 이상"
 
 # 설정 파일을 읽고 Node 를 PATH 에 추가 (launchd 는 PATH 가 거의 비어 있음)
 load_config() {

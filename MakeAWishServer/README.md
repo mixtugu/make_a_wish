@@ -1,11 +1,11 @@
 # Make a Wish 서버 (Cloudflare Workers)
 
-iPhone·iPad 가이드 앱([`../MakeAWishGuide`](../MakeAWishGuide))이 함께 쓰는 서버입니다.
+iPhone·iPad 가이드 앱([`../MakeAWishGuide`](../MakeAWishGuide))과 프로젝터 웹([`../MakeAWishWeb`](../MakeAWishWeb))이 함께 쓰는 서버입니다.
 
 | 구성 | 역할 |
 | --- | --- |
 | **Worker** (`src/index.ts`) | API. 상태 전환과 테이블 이관을 트랜잭션으로 처리 |
-| **D1** `make-a-wish-db` | `currentdata` / `lockeddata` / `unlockeddata` 테이블 (첫 요청 때 자동 생성) |
+| **D1** `make-a-wish-db` | `currentdata` / `lockeddata` / `unlockeddata` / `setting_layouts` 테이블 (첫 요청 때 자동 생성) |
 | **R2** `make-a-wish-drawings` | 소원 그림 PNG |
 | **Durable Object** `WishHub` | 기기들의 WebSocket 연결을 유지하다가 상태가 바뀌면 바로 알려 줌 (기기가 계속 물어보지 않아도 됨) |
 | **Secret** `API_TOKEN` | 앱과 공유하는 접근 토큰 |
@@ -53,6 +53,13 @@ npm run typecheck
 | `POST /api/unlock` | unlocknfctagged 의 nfc_id 로 lockeddata → unlockeddata | iPad (풀기 태그 감지 후) |
 | `DELETE /api/current` | currentdata 전체 비우기 | iPad 감사 화면, 관리 메뉴 |
 | `GET /images/<uuid>.png` | 그림 이미지 (인증 없음) | lockeddata.image_url |
+| `GET /api/live?channel=display&token=…` (WebSocket) | 연결 즉시, 그리고 바뀔 때마다 `{"type":"unlocked","rows":[…]}` / `{"type":"layouts","frames":[…]}` 전송 | 프로젝터 웹 |
+| `GET /api/unlocked` | unlockeddata 최신 20개 (그림 있는 것만) | 프로젝터 웹 |
+| `DELETE /api/unlocked/<id>` | unlockeddata 한 행 삭제 (R2 그림은 유지) | 프로젝터 웹 |
+| `GET /api/layouts` / `PUT /api/layouts` `{"frames":[{id,x,y,w,h}]}` | 프레임 배치 조회 / 저장 (`setting_layouts` 테이블) | 프로젝터 웹 `/setting` |
+| `POST /api/cleanup` | currentdata 비우기 + lockeddata 같은 nfc_id 중 가장 오래된 것만 남김 | 프로젝터 웹 `/setting` 의 clear |
+
+브라우저는 WebSocket 에 헤더를 넣을 수 없어 `/api/live` 에 한해 `?token=` 도 받습니다. `/api/*` 는 CORS 를 허용합니다.
 
 ### 단축어로 태그 처리하기 (앱의 NFC 직접 읽기를 끈 경우)
 

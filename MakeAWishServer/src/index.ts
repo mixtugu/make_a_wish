@@ -11,14 +11,22 @@ import { DurableObject, env } from "cloudflare:workers";
  *   GET    /images/<key>          소원 그림 PNG (인증 없음, 추측 불가능한 UUID 키)
  *   GET    /api/live              WebSocket. 연결 즉시 + currentdata 가 바뀔 때마다 {type:"current", rows} 를 보내 줌
  *                                 (기기가 1.5초마다 묻지 않아도 되므로 요청 수가 크게 줄어듦. "ping" → "pong")
+ *          /api/live?channel=display  프로젝터 웹용. {type:"unlocked", rows} / {type:"layouts", frames} 를 보내 줌
+ *                                 (브라우저는 WebSocket 헤더를 못 넣으므로 ?token=<API_TOKEN> 도 허용)
  *   GET    /api/current           currentdata 행 목록            (WebSocket 이 안 될 때의 폴링, 연결 테스트)
  *   POST   /api/current           {status}  waiting / unlockwaiting 추가 (iPad)
  *   DELETE /api/current           currentdata 전체 비우기 (iPad 감사 화면, 관리 메뉴)
  *   POST   /api/tag               {nfcId}   waiting → nfctagged / unlockwaiting → unlocknfctagged (iPhone, 단축어)
  *   POST   /api/lock              body=PNG  nfctagged 행 + 그림 → lockeddata (iPad)
  *   POST   /api/unlock            unlocknfctagged 의 nfc_id 로 lockeddata → unlockeddata (iPad)
+ *   POST   /api/cleanup           currentdata 비우기 + lockeddata 중복(nfc_id) 정리 (웹 설정 화면)
+ *   GET    /api/unlocked          프로젝터에 띄울 unlockeddata (최신 20개, 그림 있는 것만)
+ *   DELETE /api/unlocked/<id>     unlockeddata 한 행 삭제 (R2 그림은 남겨 둠)
+ *   GET    /api/layouts           프로젝터 프레임 배치 (frame-1 ~ frame-20)
+ *   PUT    /api/layouts           {frames:[{id,x,y,w,h}]} 프레임 배치 저장
  *
  * /api/* 는 `Authorization: Bearer <API_TOKEN>` 이 필요합니다.
+ * 웹(다른 주소)에서도 부를 수 있도록 CORS 를 허용합니다 (쿠키가 아닌 토큰 인증이라 안전).
  */
 
 const STATUS = {
@@ -31,6 +39,12 @@ const STATUS = {
 } as const;
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+/** 프로젝터에 동시에 보이는 그림 수 (= 프레임 수) */
+const DISPLAY_SLOTS = 20;
+const MAX_FRAMES = 50;
+
+/** WebSocket 채널: 가이드 앱(current) / 프로젝터 웹(display) */
+type Channel = "current" | "display";
 
 type Row = {
 	id: string;
@@ -71,6 +85,15 @@ const SCHEMA = [
 		meta TEXT,
 		created_at TEXT NOT NULL
 	)`,
+	`CREATE INDEX IF NOT EXISTS unlockeddata_created_at_idx ON unlockeddata (created_at)`,
+	`CREATE TABLE IF NOT EXISTS setting_layouts (
+		id TEXT PRIMARY KEY,
+		x INTEGER NOT NULL,
+		y INTEGER NOT NULL,
+		w INTEGER NOT NULL,
+		h INTEGER NOT NULL,
+		updated_at TEXT NOT NULL
+	)`,
 ];
 
 let schemaReady: Promise<void> | null = null;
@@ -87,10 +110,17 @@ function ensureSchema(): Promise<void> {
 // ── 공통 ───────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
 
+const CORS_HEADERS = {
+	"access-control-allow-origin": "*",
+	"access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+	"access-control-allow-headers": "authorization, content-type",
+	"access-control-max-age": "86400",
+};
+
 function json(data: unknown, status = 200): Response {
 	return new Response(JSON.stringify(data), {
 		status,
-		headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+		headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...CORS_HEADERS },
 	});
 }
 
@@ -101,11 +131,13 @@ async function sha256(text: string): Promise<ArrayBuffer> {
 }
 
 /** 토큰 비교 (길이·내용에 따른 시간 차이가 나지 않도록 해시 후 timingSafeEqual) */
-async function authorized(request: Request): Promise<boolean> {
+async function authorized(request: Request, url: URL): Promise<boolean> {
 	const expected = env.API_TOKEN;
 	if (!expected) return false; // 토큰을 설정하지 않았으면 모두 거부
 	const header = request.headers.get("authorization") ?? "";
-	const given = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+	let given = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+	// 브라우저 WebSocket 은 헤더를 넣을 수 없어 /api/live 에 한해 ?token= 허용
+	if (!given && url.pathname === "/api/live") given = url.searchParams.get("token")?.trim() ?? "";
 	if (!given) return false;
 	const [a, b] = await Promise.all([sha256(given), sha256(expected)]);
 	return crypto.subtle.timingSafeEqual(a, b);
@@ -136,6 +168,26 @@ async function listCurrent(): Promise<Response> {
 	return json({ rows: await currentRows() });
 }
 
+async function unlockedRows(): Promise<unknown[]> {
+	const { results } = await env.DB.prepare(
+		"SELECT id, image_url, created_at FROM unlockeddata WHERE image_url IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+	)
+		.bind(DISPLAY_SLOTS)
+		.all();
+	return results;
+}
+
+async function layoutRows(): Promise<unknown[]> {
+	const { results } = await env.DB.prepare("SELECT id, x, y, w, h FROM setting_layouts").all();
+	return results;
+}
+
+const snapshot = {
+	current: async () => ({ type: "current", rows: await currentRows() }),
+	unlocked: async () => ({ type: "unlocked", rows: await unlockedRows() }),
+	layouts: async () => ({ type: "layouts", frames: await layoutRows() }),
+};
+
 // ── 실시간 알림 (Durable Object) ──────────────────────────────────
 /**
  * 모든 기기의 WebSocket 을 하나의 객체가 붙잡고 있다가, currentdata 가 바뀌면 한꺼번에 알려 줍니다.
@@ -148,23 +200,29 @@ export class WishHub extends DurableObject {
 			return error(426, "WebSocket 연결이 필요합니다");
 		}
 		this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+		const channel: Channel =
+			new URL(request.url).searchParams.get("channel") === "display" ? "display" : "current";
 		const { 0: client, 1: server } = new WebSocketPair();
-		this.ctx.acceptWebSocket(server);
+		this.ctx.acceptWebSocket(server, [channel]);
 		// 연결하자마자 현재 상태를 보내 줌 (재연결 중에 놓친 변화도 이걸로 맞춰짐)
 		try {
 			await ensureSchema();
-			server.send(JSON.stringify({ type: "current", rows: await currentRows() }));
+			const messages =
+				channel === "display"
+					? await Promise.all([snapshot.unlocked(), snapshot.layouts()])
+					: [await snapshot.current()];
+			for (const m of messages) server.send(JSON.stringify(m));
 		} catch (e) {
 			console.error("initial snapshot failed", e);
 		}
 		return new Response(null, { status: 101, webSocket: client });
 	}
 
-	/** 연결된 모든 기기에 최신 currentdata 전송 */
-	broadcast(rows: unknown[]): number {
-		const message = JSON.stringify({ type: "current", rows });
+	/** 해당 채널에 연결된 모든 기기에 메시지 전송 */
+	broadcast(channel: Channel, data: unknown): number {
+		const message = JSON.stringify(data);
 		let sent = 0;
-		for (const ws of this.ctx.getWebSockets()) {
+		for (const ws of this.ctx.getWebSockets(channel)) {
 			try {
 				ws.send(message);
 				sent++;
@@ -191,12 +249,29 @@ export class WishHub extends DurableObject {
 // 이름(문자열)으로 자기 자신을 가리키는 바인딩이라 클래스 타입이 추론되지 않아 명시
 const hub = () => (env.HUB as DurableObjectNamespace<WishHub>).getByName("main");
 
-async function notifyChanged(): Promise<void> {
-	try {
-		await hub().broadcast(await currentRows());
-	} catch (e) {
-		console.error("broadcast failed", e);
-	}
+type Change = "current" | "unlocked" | "layouts";
+
+/** 상태를 바꾸는 요청이 어떤 데이터를 바꾸는지 */
+function changesOf(method: string, pathname: string): Change[] {
+	if (method === "GET") return [];
+	if (pathname === "/api/unlock") return ["current", "unlocked"];
+	if (pathname.startsWith("/api/unlocked/")) return ["unlocked"];
+	if (pathname === "/api/layouts") return ["layouts"];
+	if (pathname.startsWith("/api/")) return ["current"];
+	return [];
+}
+
+async function notifyChanged(changes: Change[]): Promise<void> {
+	await Promise.all(
+		changes.map(async (change) => {
+			try {
+				const channel: Channel = change === "current" ? "current" : "display";
+				await hub().broadcast(channel, await snapshot[change]());
+			} catch (e) {
+				console.error(`broadcast ${change} failed`, e);
+			}
+		}),
+	);
 }
 
 /** POST /api/current {status} – 원본 CurrentInsert (status 만 기록) */
@@ -330,6 +405,70 @@ async function unlock(): Promise<Response> {
 	return json({ moved: locked.length });
 }
 
+/**
+ * POST /api/cleanup – 원본 웹 설정 화면의 clear 버튼:
+ * currentdata 전체 삭제 + lockeddata 에서 같은 nfc_id 가 여러 개면 가장 오래된 것만 남김.
+ */
+async function cleanup(): Promise<Response> {
+	const [current, locked] = await env.DB.batch([
+		env.DB.prepare("DELETE FROM currentdata"),
+		env.DB.prepare(
+			`DELETE FROM lockeddata WHERE id NOT IN (
+				SELECT id FROM (
+					SELECT id, ROW_NUMBER() OVER (PARTITION BY nfc_id ORDER BY created_at) AS rn FROM lockeddata
+				) WHERE rn = 1
+			)`,
+		),
+	]);
+	return json({ current: current.meta.changes ?? 0, locked: locked.meta.changes ?? 0 });
+}
+
+/** GET /api/unlocked */
+async function listUnlocked(): Promise<Response> {
+	return json({ rows: await unlockedRows() });
+}
+
+/** DELETE /api/unlocked/<id> – 프로젝터 화면에서 그림 내리기 (R2 의 그림 파일은 유지) */
+async function deleteUnlocked(id: string): Promise<Response> {
+	if (!id || id.length > 64) return error(400, "id 가 필요합니다");
+	const res = await env.DB.prepare("DELETE FROM unlockeddata WHERE id = ?").bind(id).run();
+	return json({ deleted: res.meta.changes ?? 0 });
+}
+
+/** GET /api/layouts */
+async function listLayouts(): Promise<Response> {
+	return json({ frames: await layoutRows() });
+}
+
+/** PUT /api/layouts {frames:[{id,x,y,w,h}]} – 보낸 프레임만 저장/갱신 */
+async function saveLayouts(request: Request): Promise<Response> {
+	const { frames } = await readJson(request);
+	if (!Array.isArray(frames) || frames.length > MAX_FRAMES) return error(400, "frames 배열이 필요합니다");
+
+	const valid = frames.every(
+		(f) =>
+			f &&
+			typeof f === "object" &&
+			typeof f.id === "string" &&
+			/^frame-\d{1,2}$/.test(f.id) &&
+			["x", "y", "w", "h"].every((k) => Number.isFinite(f[k]) && Math.abs(f[k]) <= 100_000),
+	);
+	if (!valid) return error(400, "frames 형식이 올바르지 않습니다");
+	if (!frames.length) return json({ saved: 0 });
+
+	const ts = now();
+	const upsert = env.DB.prepare(
+		`INSERT INTO setting_layouts (id, x, y, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (id) DO UPDATE SET x = excluded.x, y = excluded.y, w = excluded.w, h = excluded.h, updated_at = excluded.updated_at`,
+	);
+	await env.DB.batch(
+		frames.map((f) =>
+			upsert.bind(f.id, Math.round(f.x), Math.round(f.y), Math.round(f.w), Math.round(f.h), ts),
+		),
+	);
+	return json({ saved: frames.length });
+}
+
 /** GET /images/<key> */
 async function image(key: string): Promise<Response> {
 	if (!/^[0-9a-f-]{36}\.png$/.test(key)) return error(404, "not found");
@@ -339,6 +478,7 @@ async function image(key: string): Promise<Response> {
 		headers: {
 			"content-type": "image/png",
 			"cache-control": "public, max-age=31536000, immutable",
+			"access-control-allow-origin": "*",
 			etag: object.httpEtag,
 		},
 	});
@@ -349,9 +489,8 @@ export default {
 	async fetch(request, _env, ctx) {
 		const response = await route(request);
 		// 상태를 바꾸는 요청이 성공하면 연결된 기기들에 바로 알림
-		if (request.method !== "GET" && response.ok && new URL(request.url).pathname.startsWith("/api/")) {
-			ctx.waitUntil(notifyChanged());
-		}
+		const changes = response.ok ? changesOf(request.method, new URL(request.url).pathname) : [];
+		if (changes.length) ctx.waitUntil(notifyChanged(changes));
 		return response;
 	},
 } satisfies ExportedHandler<Env>;
@@ -369,9 +508,14 @@ async function route(request: Request): Promise<Response> {
 			return await image(pathname.slice("/images/".length));
 		}
 		if (!pathname.startsWith("/api/")) return error(404, "not found");
+		if (method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
 
-		if (!(await authorized(request))) return error(401, "unauthorized");
+		if (!(await authorized(request, url))) return error(401, "unauthorized");
 		await ensureSchema();
+
+		if (pathname.startsWith("/api/unlocked/") && method === "DELETE") {
+			return await deleteUnlocked(decodeURIComponent(pathname.slice("/api/unlocked/".length)));
+		}
 
 		switch (`${method} ${pathname}`) {
 			case "GET /api/live":
@@ -388,6 +532,14 @@ async function route(request: Request): Promise<Response> {
 				return await lock(request, url);
 			case "POST /api/unlock":
 				return await unlock();
+			case "POST /api/cleanup":
+				return await cleanup();
+			case "GET /api/unlocked":
+				return await listUnlocked();
+			case "GET /api/layouts":
+				return await listLayouts();
+			case "PUT /api/layouts":
+				return await saveLayouts(request);
 			default:
 				return error(404, "not found");
 		}
