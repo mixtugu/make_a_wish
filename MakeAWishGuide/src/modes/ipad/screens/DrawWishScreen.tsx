@@ -13,7 +13,7 @@ import { SvgAsset } from '../../../components/SvgAsset';
 import { STATUS } from '../../../config/defaults';
 import { useScale } from '../../../hooks/useScale';
 import { useApi } from '../../../hooks/useApi';
-import { strings } from '../../../i18n/strings';
+import { flowStrings, strings } from '../../../i18n/strings';
 import { insertStatus } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import { log } from '../../../utils/log';
@@ -41,14 +41,16 @@ const INK_COLORS = ['#000000', '#D00000', '#1E5BD8', '#1F8A3B', '#F28C28', '#7B3
 const WIDTHS = [3, 6, 10, 16];
 
 /** 원본 bottomPaddingForLang() – 언어별 문구 길이 차이 보정 */
-const USE_PEN_BOTTOM = { ko: 57, ja: 28, en: 33, zh: 93 } as const;
+const USE_PEN_BOTTOM = { ja: 28, en: 33 } as const;
 
-export function DrawWishScreen({ session, update, go }: IPadScreenProps) {
+export function DrawWishScreen({ session, update, next, preview }: IPadScreenProps) {
   const { scale: sc, s } = useScale(IPAD_DESIGN);
   const insets = useSafeAreaInsets();
   const db = useApi();
   const { lang, nationality } = session;
   const t = strings.draw;
+  // 질문·카드 안내는 사용자 유형별 (이 화면은 유형을 고른 뒤에만 옴)
+  const userType = nationality ?? 'foreignResident';
 
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const [tool, setTool] = useState<DrawingTool>('pen');
@@ -66,17 +68,18 @@ export function DrawWishScreen({ session, update, go }: IPadScreenProps) {
       log('draw', `이미지 생성: ${image ? `${Math.round(image.width)}x${Math.round(image.height)}` : '실패'}`);
       update({ drawing: image });
       try {
-        await insertStatus(db, STATUS.waiting);
+        if (!preview) await insertStatus(db, STATUS.waiting); // 미리보기에서는 서버에 쓰지 않음
       } catch (e) {
         // 원본과 동일: 실패해도 다음 화면으로 진행
         log('draw', 'waiting insert 실패', e);
       }
-      go('savedNext');
+      await next();
     } finally {
       setBusy(false);
     }
   };
 
+  // 기록할 카드: 외국인 빨강(drawnext2), 일본인 노랑(drawnext1)
   const nextImage = nationality === 'foreignResident' ? 'drawnext2' : 'drawnext1';
   const emaLeft = sc(EMA_LEFT);
   const emaStyle = useMemo(() => ({ position: 'absolute' as const, left: emaLeft, top: 0 }), [emaLeft]);
@@ -103,7 +106,7 @@ export function DrawWishScreen({ session, update, go }: IPadScreenProps) {
             ]}
           >
             <AppText lang={lang} size={sc(28)} lineSpacing={sc(14)} align="left">
-              {t.longDesc[lang]}
+              {flowStrings.question[userType][lang]}
             </AppText>
           </View>
           <View
@@ -240,7 +243,7 @@ export function DrawWishScreen({ session, update, go }: IPadScreenProps) {
           weight="700"
           style={{ paddingVertical: sc(20), paddingHorizontal: sc(16) }}
         >
-          {t.message[lang]}
+          {flowStrings.pickRecordCard[userType][lang]}
         </AppText>
         <Pressable
           onPress={onFinish}

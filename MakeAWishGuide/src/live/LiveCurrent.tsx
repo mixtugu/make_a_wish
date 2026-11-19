@@ -1,10 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { useApi } from '../hooks/useApi';
 import type { CurrentRow } from '../services/api';
 import { useSettings } from '../settings/SettingsContext';
 import { log } from '../utils/log';
+
+// 브라우저 테스트에서는 WebSocket 에 토큰 헤더를 붙일 수 없으므로 주기적 확인만 사용
+const LIVE_SUPPORTED = Platform.OS !== 'web';
 
 /**
  * 서버의 currentdata 를 앱 전체에서 하나의 연결로 지켜봅니다.
@@ -51,7 +54,8 @@ export function LiveCurrentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!serverUrl) return;
     let cancelled = false;
-    let active = AppState.currentState !== 'background';
+    // 브라우저 테스트에서는 창이 가려져도(다른 탭) 계속 확인 – 두 화면을 탭으로 띄워도 동작하도록
+    let active = Platform.OS === 'web' || AppState.currentState !== 'background';
     let ws: WebSocket | null = null;
     let wsOpen = false;
     let attempt = 0;
@@ -105,7 +109,7 @@ export function LiveCurrentProvider({ children }: { children: ReactNode }) {
 
     const connect = () => {
       reconnectTimer = null;
-      if (cancelled || !active || !liveUpdates || ws) return;
+      if (cancelled || !active || !liveUpdates || !LIVE_SUPPORTED || ws) return;
       const url = `${serverUrl.replace(/^http/i, 'ws')}/api/live`;
       const Socket = WebSocket as unknown as RNWebSocketCtor;
       const sock = new Socket(url, null, { headers: { Authorization: `Bearer ${apiToken}` } });
@@ -184,11 +188,12 @@ export function LiveCurrentProvider({ children }: { children: ReactNode }) {
     };
 
     const start = () => {
-      if (liveUpdates) connect();
+      if (liveUpdates && LIVE_SUPPORTED) connect();
       else startPolling();
     };
 
     const sub = AppState.addEventListener('change', (state) => {
+      if (Platform.OS === 'web') return;
       if (state === 'active' && !active) {
         active = true;
         start();

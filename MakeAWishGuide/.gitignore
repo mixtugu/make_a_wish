@@ -42,3 +42,6 @@ mac/config.env
 # generated native folders
 /ios
 /android
+
+# 서버 토큰 등 비밀값 (git 에 올리지 않음)
+.secrets.env

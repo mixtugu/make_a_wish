@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
+import { STATUS } from '../../config/defaults';
+import { useApi } from '../../hooks/useApi';
+import { displayLanguage } from '../../i18n/types';
+import { insertStatus } from '../../services/wishFlow';
 import { useSettings } from '../../settings/SettingsContext';
 import { colors } from '../../theme';
+import { log } from '../../utils/log';
+import { nextStep } from './flow';
 import { AttachScreen } from './screens/AttachScreen';
 import { DrawWishScreen } from './screens/DrawWishScreen';
 import { LanguageScreen } from './screens/LanguageScreen';
@@ -14,7 +20,7 @@ import { UnlockedScreen } from './screens/UnlockedScreen';
 import { WishSavedScreen } from './screens/WishSavedScreen';
 import type { IPadScreenProps, IPadSession, IPadStep } from './types';
 
-const SCREENS: Record<IPadStep, ComponentType<IPadScreenProps>> = {
+export const SCREENS: Record<IPadStep, ComponentType<IPadScreenProps>> = {
   language: LanguageScreen,
   nationality: NationalityScreen,
   draw: DrawWishScreen,
@@ -29,31 +35,49 @@ const SCREENS: Record<IPadStep, ComponentType<IPadScreenProps>> = {
 /**
  * iPad 가이드 (원본 LanguageChooseView → … → ThankView 의 fullScreenCover 체인).
  * 뒤로 가기 없는 일방향 키오스크 흐름이라 단순한 상태 머신으로 구성했습니다.
+ * 화면 순서는 사용자 유형(일본인 / 외국인)에 따라 다릅니다 – flow.ts
  */
 export function IPadGuide() {
-  const { settings, lastLanguage } = useSettings();
+  const { settings } = useSettings();
+  const db = useApi();
 
+  // 매 방문은 기본 언어(일본어)로 시작
   const freshSession = useCallback(
-    (): IPadSession => ({
-      lang: settings.rememberLastLanguage && lastLanguage ? lastLanguage : settings.defaultLanguage,
-      nationality: null,
-      drawing: null,
-    }),
-    [settings.rememberLastLanguage, settings.defaultLanguage, lastLanguage],
+    (): IPadSession => ({ lang: settings.defaultLanguage, nationality: null, drawing: null }),
+    [settings.defaultLanguage],
   );
 
   const [step, setStep] = useState<IPadStep>('language');
+  // session.lang = 첫 화면에서 고른 언어 (사용자 유형과 별도로 보관)
   const [session, setSession] = useState<IPadSession>(freshSession);
   const [opacity] = useState(() => new Animated.Value(1));
+  const navigating = useRef(false);
 
   const go = useCallback(
-    (next: IPadStep) => {
+    (target: IPadStep) => {
+      navigating.current = false;
       opacity.setValue(0);
-      setStep(next);
+      setStep(target);
       Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     },
     [opacity],
   );
+
+  /** 사용자 유형별 순서에 따라 다음 화면으로 (연타해도 한 번만) */
+  const next = useCallback(async () => {
+    if (navigating.current) return;
+    navigating.current = true;
+    const target = nextStep(step, session.nationality);
+    if (target === 'removeTouch') {
+      // 해제 단계 시작: iPhone 을 "fulfill someone's wish" 화면으로 (원본 WishSavedView 의 동작)
+      try {
+        await insertStatus(db, STATUS.unlockWaiting);
+      } catch (e) {
+        log('ipad', 'unlockwaiting insert 실패', e); // 원본과 동일: 실패해도 진행
+      }
+    }
+    go(target);
+  }, [db, go, step, session.nationality]);
 
   const update = useCallback((patch: Partial<IPadSession>) => {
     setSession((prev) => ({ ...prev, ...patch }));
@@ -82,6 +106,11 @@ export function IPadGuide() {
   }, [bumpIdle]);
 
   const Screen = SCREENS[step];
+  // 화면에는 사용자 유형을 반영한 표시 언어를 넘김 (일본인 → 일본어 고정)
+  const view = useMemo(
+    () => ({ ...session, lang: displayLanguage(session.lang, session.nationality) }),
+    [session],
+  );
 
   return (
     <View
@@ -93,7 +122,7 @@ export function IPadGuide() {
       }}
     >
       <Animated.View style={[styles.root, { opacity }]}>
-        <Screen key={step} session={session} update={update} go={go} restart={restart} />
+        <Screen key={step} session={view} update={update} next={next} restart={restart} />
       </Animated.View>
     </View>
   );

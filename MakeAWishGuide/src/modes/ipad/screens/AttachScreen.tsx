@@ -9,7 +9,7 @@ import { colors, IPAD_DESIGN } from '../../../theme';
 import type { IPadScreenProps } from '../types';
 
 /** 원본 AttachFortuneView: 소원 종이를 앞의 끈에 묶도록 안내 */
-export function AttachScreen({ session, go }: IPadScreenProps) {
+export function AttachScreen({ session, next }: IPadScreenProps) {
   const { scale: sc, s, width } = useScale(IPAD_DESIGN);
   const { lang } = session;
 
@@ -32,7 +32,7 @@ export function AttachScreen({ session, go }: IPadScreenProps) {
         </AppText>
         <View style={{ flex: 1 }} />
         <Pressable
-          onPress={() => go('wishSaved')}
+          onPress={next}
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.button,

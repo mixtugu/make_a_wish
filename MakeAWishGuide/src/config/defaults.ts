@@ -20,10 +20,13 @@ export interface AppSettings {
   liveUpdates: boolean;
   /** 실시간 연결이 없을 때의 상태 확인 주기(ms). 원본은 1.5초 */
   pollIntervalMs: number;
-  /** iPad: 언어 선택 화면에서 처음 선택되어 있는 언어 */
+  /** iPad: 매 방문을 시작할 때의 언어 (기본 일본어, 첫 화면 오른쪽 위에서 영어로 전환 가능) */
   defaultLanguage: AppLanguage;
-  /** iPad: true 면 마지막 방문자가 고른 언어를 다음 방문자에게도 유지 (원본 동작) */
-  rememberLastLanguage: boolean;
+  /**
+   * 테스트 모드: NFC 태그 대신 화면의 가상 카드 버튼으로 태그를 흉내 냅니다.
+   * 서버 요청(POST /api/tag)은 실제 태그와 똑같이 보내므로 기록·해제·그림 저장·프로젝터까지 실제로 동작합니다.
+   */
+  testMode: boolean;
   /**
    * iPhone: 앱이 직접 NFC 태그를 읽어 currentdata 를 nfctagged / unlocknfctagged 로 바꿉니다.
    * 끄면(기본값) 원본처럼 외부(단축어 자동화 등)가 상태를 바꿔 준다고 가정합니다.
@@ -45,7 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liveUpdates: true,
   pollIntervalMs: 1500,
   defaultLanguage: 'ja',
-  rememberLastLanguage: true,
+  testMode: false,
   nfcInAppScan: false,
   showSettingsButton: true,
   keepAwake: true,

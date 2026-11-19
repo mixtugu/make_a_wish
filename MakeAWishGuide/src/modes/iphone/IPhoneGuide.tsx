@@ -11,9 +11,10 @@ import { useCurrentStatus } from '../../live/LiveCurrent';
 import { failNfc, finishNfc, isNfcAvailable, readTagId } from '../../services/nfc';
 import { markTagged } from '../../services/wishFlow';
 import { useSettings } from '../../settings/SettingsContext';
+import { TestTagPanel } from '../../testmode/TestTagPanel';
 import { colors, IPHONE_DESIGN } from '../../theme';
 
-type ActiveStatus = typeof STATUS.waiting | typeof STATUS.unlockWaiting;
+export type ActiveStatus = typeof STATUS.waiting | typeof STATUS.unlockWaiting;
 
 /**
  * iPhone 가이드 (원본 MainView + NFCView)
@@ -40,7 +41,8 @@ function MakeAWishCircle({ title, s }: { title: string; s: number }) {
       <Text
         allowFontScaling={false}
         numberOfLines={1}
-        style={[styles.circleText, { fontFamily: chalkduster, fontSize: 39 * s, width: 420 * s }]}
+        // maxWidth: 웹에서는 numberOfLines 가 원 크기로 줄여 말줄임이 되므로 원본처럼 원 밖으로 넘치게 지정
+        style={[styles.circleText, { fontFamily: chalkduster, fontSize: 39 * s, width: 420 * s, maxWidth: 420 * s }]}
       >
         {title}
       </Text>
@@ -49,7 +51,7 @@ function MakeAWishCircle({ title, s }: { title: string; s: number }) {
 }
 
 /** 원본 MainView */
-function IdleScreen() {
+export function IdleScreen() {
   const { s } = useScale(IPHONE_DESIGN);
   return (
     <View style={styles.center}>
@@ -61,11 +63,13 @@ function IdleScreen() {
 type ScanState = 'off' | 'scanning' | 'idle' | 'unavailable';
 
 /** 원본 NFCView */
-function NfcScreen({ status }: { status: ActiveStatus }) {
+/** preview: 화면 미리보기 (NFC 읽기·테스트 버튼 없이 모양만) */
+export function NfcScreen({ status, preview = false }: { status: ActiveStatus; preview?: boolean }) {
   const { settings } = useSettings();
+  const inAppScan = settings.nfcInAppScan && !preview;
   const db = useApi();
   const { s, width } = useScale(IPHONE_DESIGN);
-  const [scan, setScan] = useState<ScanState>(settings.nfcInAppScan ? 'idle' : 'off');
+  const [scan, setScan] = useState<ScanState>(inAppScan ? 'idle' : 'off');
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -76,7 +80,7 @@ function NfcScreen({ status }: { status: ActiveStatus }) {
   }, []);
 
   const startScan = useCallback(async () => {
-    if (!settings.nfcInAppScan) return;
+    if (!inAppScan) return;
     if (!(await isNfcAvailable())) {
       if (mounted.current) setScan('unavailable');
       return;
@@ -100,14 +104,14 @@ function NfcScreen({ status }: { status: ActiveStatus }) {
       await failNfc('Could not reach the server – please try again');
     }
     if (mounted.current) setScan('idle');
-  }, [db, settings.nfcInAppScan]);
+  }, [db, inAppScan]);
 
   // 화면이 뜨면 (화면을 먼저 그린 뒤) 자동으로 한 번 스캔 시작
   useEffect(() => {
-    if (!settings.nfcInAppScan) return;
+    if (!inAppScan) return;
     const timer = setTimeout(startScan, 400);
     return () => clearTimeout(timer);
-  }, [settings.nfcInAppScan, startScan]);
+  }, [inAppScan, startScan]);
 
   // nfctouchphone 이미지 안의 주황색 원(cx 23.86, cy 11.97, r 8.95 / 46.87×38.17) 위에 문구 배치
   const imageW = Math.min(width - 32, 440 * s) * 1.1;
@@ -147,6 +151,10 @@ function NfcScreen({ status }: { status: ActiveStatus }) {
         </View>
       </View>
       <MakeAWishCircle title={iphoneStrings.circleTitle} s={s} />
+      {/* 테스트 모드: 이 iPhone 에 카드를 댄 것처럼 */}
+      {!preview && (
+        <TestTagPanel kind={status === STATUS.unlockWaiting ? 'release' : 'record'} style={{ bottom: 24 }} />
+      )}
       {scan === 'idle' && (
         <Text style={[styles.hint, { fontSize: 15 * s }]}>Tap the screen to start an NFC scan</Text>
       )}
@@ -168,7 +176,7 @@ const styles = StyleSheet.create({
   },
   circleWrap: { alignItems: 'center', justifyContent: 'center' },
   circle: { position: 'absolute', borderColor: colors.white },
-  circleText: { color: colors.black, textAlign: 'center' },
+  circleText: { color: colors.black, textAlign: 'center', flexShrink: 0 },
   messageBox: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   hint: { position: 'absolute', bottom: 48, color: 'rgba(0,0,0,0.45)', textAlign: 'center' },
 });

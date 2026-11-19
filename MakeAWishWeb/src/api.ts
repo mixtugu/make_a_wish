@@ -144,6 +144,8 @@ export function useDisplayData() {
   const [rows, setRows] = useState<UnlockedRow[]>([]);
   const [frames, setFrames] = useState<FrameLayout[]>([]);
   const [connected, setConnected] = useState(false);
+  // 처음 목록을 받았는지 (그 전의 빈 목록과 구분 – 풀린 소원 애니메이션이 처음 화면을 새 소원으로 착각하지 않도록)
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -162,6 +164,7 @@ export function useDisplayData() {
       const cfg = loadConfig();
       try {
         setRows(await api.listUnlocked());
+        setLoaded(true);
       } catch (err) {
         if (err instanceof AuthError) return; // 연결 화면으로 넘어감
         console.error(err);
@@ -205,5 +208,5 @@ export function useDisplayData() {
     };
   }, []);
 
-  return { rows, setRows, frames, connected };
+  return { rows, setRows, frames, connected, loaded };
 }

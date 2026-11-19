@@ -12,10 +12,15 @@ import {
 import { Platform } from 'react-native';
 
 import { DEFAULT_SETTINGS, type AppSettings, type GuideMode } from '../config/defaults';
-import type { AppLanguage } from '../i18n/types';
+import { isAppLanguage } from '../i18n/types';
+import { webModeOverride } from '../utils/webMode';
+
+// 브라우저 테스트: 주소의 ?mode= 가 있으면 그 모드로 (앱에서는 null)
+const WEB_MODE = webModeOverride();
 
 const STORAGE_KEY = 'makeawish.settings.v1';
-const LAST_LANGUAGE_KEY = 'makeawish.lastLanguage';
+// 이전 버전의 '마지막 방문자 언어' 저장 키 (이제 매 방문은 기본 언어로 시작하므로 정리만 함)
+const LEGACY_LAST_LANGUAGE_KEY = 'makeawish.lastLanguage';
 
 interface SettingsContextValue {
   settings: AppSettings;
@@ -26,8 +31,6 @@ interface SettingsContextValue {
   isTabletDevice: boolean;
   update: (patch: Partial<AppSettings>) => Promise<void>;
   reset: () => Promise<void>;
-  lastLanguage: AppLanguage | null;
-  setLastLanguage: (lang: AppLanguage) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -37,7 +40,8 @@ const isTabletDevice = Platform.OS === 'ios' ? Platform.isPad : false;
 function sanitize(raw: unknown): AppSettings {
   const merged = { ...DEFAULT_SETTINGS, ...(typeof raw === 'object' && raw ? raw : {}) } as AppSettings;
   if (!['auto', 'iphone', 'ipad'].includes(merged.mode)) merged.mode = 'auto';
-  if (!['ja', 'en', 'ko', 'zh'].includes(merged.defaultLanguage)) merged.defaultLanguage = 'ja';
+  // 일본어·영어만 지원 (예전에 한국어·중국어로 저장된 기기는 일본어로)
+  if (!isAppLanguage(merged.defaultLanguage)) merged.defaultLanguage = 'ja';
   const poll = Number(merged.pollIntervalMs);
   merged.pollIntervalMs = Number.isFinite(poll) ? Math.min(Math.max(poll, 500), 10000) : 1500;
   const idle = Number(merged.idleResetSeconds);
@@ -49,30 +53,25 @@ function sanitize(raw: unknown): AppSettings {
   delete legacy.supabaseUrl;
   delete legacy.supabaseAnonKey;
   delete legacy.storageBucket;
+  delete legacy.rememberLastLanguage;
   return merged;
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
-  const [lastLanguage, setLastLanguageState] = useState<AppLanguage | null>(null);
   // 최신 설정값 (update 를 연달아 호출해도 이전 패치가 유실되지 않도록). 렌더 중에는 읽지 않음
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     (async () => {
       try {
-        const [raw, lastLang] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEY),
-          AsyncStorage.getItem(LAST_LANGUAGE_KEY),
-        ]);
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        AsyncStorage.removeItem(LEGACY_LAST_LANGUAGE_KEY).catch(() => {});
         if (raw) {
           const parsed = sanitize(JSON.parse(raw));
           settingsRef.current = parsed;
           setSettings(parsed);
-        }
-        if (lastLang === 'ja' || lastLang === 'en' || lastLang === 'ko' || lastLang === 'zh') {
-          setLastLanguageState(lastLang);
         }
       } catch (e) {
         console.warn('[settings] 불러오기 실패 – 기본값 사용', e);
@@ -100,23 +99,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
-  const setLastLanguage = useCallback((lang: AppLanguage) => {
-    setLastLanguageState(lang);
-    AsyncStorage.setItem(LAST_LANGUAGE_KEY, lang).catch(() => {});
-  }, []);
-
   const value = useMemo<SettingsContextValue>(
     () => ({
       settings,
       loaded,
-      resolvedMode: settings.mode === 'auto' ? (isTabletDevice ? 'ipad' : 'iphone') : settings.mode,
+      resolvedMode:
+        WEB_MODE ?? (settings.mode === 'auto' ? (isTabletDevice ? 'ipad' : 'iphone') : settings.mode),
       isTabletDevice,
       update,
       reset,
-      lastLanguage,
-      setLastLanguage,
     }),
-    [settings, loaded, update, reset, lastLanguage, setLastLanguage],
+    [settings, loaded, update, reset],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

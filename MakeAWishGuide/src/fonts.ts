@@ -6,11 +6,10 @@ import type { GuideMode } from './config/defaults';
 import type { AppLanguage } from './i18n/types';
 
 /**
- * 원본 FontManager.swift 의 언어별 (primary, secondary) 폰트 세트.
- * - ko: AppleSDGothicNeo / 교보손글씨 2024
+ * 원본 FontManager.swift 의 언어별 (primary, secondary) 폰트 세트 (일본어·영어).
  * - en: Afacad / Chalkduster
  * - ja: Zen Kaku Gothic New / Yuji Syuku
- * - zh: Noto Sans SC / Ma Shan Zheng
+ * (한국어·중국어 폰트 파일은 assets/fonts 에 남아 있지만 더 이상 불러오지 않음)
  */
 const CHALKDUSTER = 'Chalkduster';
 
@@ -20,9 +19,6 @@ const chalkdusterSource =
 
 const IPAD_FONTS = {
   Afacad: require('../assets/fonts/Afacad-VariableFont_wght.ttf'),
-  KyoboHandwriting2024psw: require('../assets/fonts/KyoboHandwriting2024psw.ttf'),
-  'MaShanZheng-Regular': require('../assets/fonts/MaShanZheng-Regular.ttf'),
-  NotoSansSC: require('../assets/fonts/NotoSansSC-VariableFont_wght.ttf'),
   'YujiSyuku-Regular': require('../assets/fonts/YujiSyuku-Regular.ttf'),
   'ZenKakuGothicNew-Regular': require('../assets/fonts/ZenKakuGothicNew-Regular.ttf'),
   ...chalkdusterSource,
@@ -30,20 +26,16 @@ const IPAD_FONTS = {
 
 const IPHONE_FONTS = { ...chalkdusterSource };
 
-const KOREAN_PRIMARY = Platform.select({ ios: 'Apple SD Gothic Neo', default: undefined });
-
 const FONT_PAIRS: Record<AppLanguage, { primary: string | undefined; secondary: string }> = {
-  ko: { primary: KOREAN_PRIMARY, secondary: 'KyoboHandwriting2024psw' },
   en: { primary: 'Afacad', secondary: CHALKDUSTER },
   ja: { primary: 'ZenKakuGothicNew-Regular', secondary: 'YujiSyuku-Regular' },
-  zh: { primary: 'NotoSansSC', secondary: 'MaShanZheng-Regular' },
 };
 
 let loadFailed = false;
 
 /** 언어별 폰트 이름. 폰트 로드에 실패했다면 시스템 폰트(undefined)로 대체 */
 export function fontFor(lang: AppLanguage, secondary = false): string | undefined {
-  if (loadFailed) return lang === 'ko' && !secondary ? KOREAN_PRIMARY : undefined;
+  if (loadFailed) return undefined;
   const pair = FONT_PAIRS[lang];
   return secondary ? pair.secondary : pair.primary;
 }

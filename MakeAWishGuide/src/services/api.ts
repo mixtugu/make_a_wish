@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * Make a Wish 서버(Cloudflare Worker, ../../MakeAWishServer) 클라이언트.
  * 상태 이관 로직은 서버가 트랜잭션으로 처리하고, 앱은 단계별 요청만 보냅니다.
@@ -56,7 +58,13 @@ async function request<T>(
   }
 
   try {
-    const res = await fetch(`${cfg.url}${path}`, { method, headers, body: payload, signal: controller.signal });
+    let url = `${cfg.url}${path}`;
+    if (Platform.OS === 'web') {
+      // 브라우저 테스트: 개발 서버(metro.config.js)가 대신 전달 (브라우저의 CORS 제한 회피)
+      headers['x-mw-target'] = cfg.url;
+      url = `/__api${path}`;
+    }
+    const res = await fetch(url, { method, headers, body: payload, signal: controller.signal });
     const text = await res.text();
     if (!res.ok) throw new ApiError(`${method} ${path} → HTTP ${res.status}`, res.status, text);
     return (text ? JSON.parse(text) : {}) as T;

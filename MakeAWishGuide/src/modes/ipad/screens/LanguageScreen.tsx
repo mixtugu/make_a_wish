@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../../components/AppText';
@@ -10,36 +10,27 @@ import { useSettings } from '../../../settings/SettingsContext';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import type { IPadScreenProps } from '../types';
 
-/** 원본 LanguageChooseView */
-export function LanguageScreen({ session, update, go }: IPadScreenProps) {
+/** 원본 LanguageChooseView – 소개 화면. 오른쪽 위의 작은 버튼으로 일본어 / 영어 전환 (이 화면에서만) */
+export function LanguageScreen({ session, update, next }: IPadScreenProps) {
   const { scale: sc, s } = useScale(IPAD_DESIGN);
   const insets = useSafeAreaInsets();
-  const { setLastLanguage } = useSettings();
+  const { settings } = useSettings();
   const lang = session.lang;
-  const sideWidth = sc(80) + sc(32);
-
-  const onContinue = () => {
-    setLastLanguage(lang);
-    go('nationality');
-  };
+  // ⚙︎ 관리 버튼(44pt, 오른쪽 위 12pt)이 보이면 그 왼쪽에 둠
+  const toggleRight = insets.right + (settings.showSettingsButton ? 12 + 44 + 10 : sc(20));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + sc(16) }]}>
+      <LanguageToggle
+        lang={lang}
+        s={s}
+        onChange={(l) => update({ lang: l })}
+        style={{ top: insets.top + 12, right: toggleRight }}
+      />
       <View style={styles.spacer} />
       <View style={[styles.row, { marginBottom: sc(50), paddingHorizontal: sc(16) }]}>
-        <View style={{ width: sideWidth, gap: sc(12) }}>
-          {LANGUAGES.map((l) => (
-            <LanguageButton
-              key={l}
-              lang={l}
-              selected={l === lang}
-              s={s}
-              onPress={() => update({ lang: l })}
-            />
-          ))}
-        </View>
-        {/* 원본 infoSection (offset x: -70 → 좌우 대칭이 되도록 오른쪽 여백) */}
-        <View style={[styles.info, { gap: sc(16), paddingRight: sideWidth }]}>
+        {/* 원본 infoSection */}
+        <View style={[styles.info, { gap: sc(16) }]}>
           <AppText lang={lang} size={sc(28)} weight="700" lineSpacing={sc(10)}>
             {strings.language.infoTop[lang]}
           </AppText>
@@ -54,7 +45,7 @@ export function LanguageScreen({ session, update, go }: IPadScreenProps) {
         </View>
       </View>
       <Pressable
-        onPress={onContinue}
+        onPress={next}
         style={({ pressed }) => [
           styles.button,
           { width: sc(240), height: sc(50), opacity: pressed ? 0.75 : 1 },
@@ -71,38 +62,57 @@ export function LanguageScreen({ session, update, go }: IPadScreenProps) {
   );
 }
 
-function LanguageButton({
+/** 「日本語 / EN」 작은 전환 버튼 */
+function LanguageToggle({
   lang,
-  selected,
   s,
-  onPress,
+  onChange,
+  style,
 }: {
   lang: AppLanguage;
-  selected: boolean;
   s: number;
-  onPress: () => void;
+  onChange: (lang: AppLanguage) => void;
+  style: StyleProp<ViewStyle>;
 }) {
+  const size = Math.max(0.85, Math.min(s, 1.2));
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      accessibilityLabel={LANGUAGE_META[lang].title}
-      style={[
-        styles.langButton,
-        {
-          width: 80 * s,
-          paddingVertical: 16 * s,
-          borderRadius: 14 * s,
-          borderColor: selected ? colors.accent : 'rgba(60,60,67,0.35)',
-          borderWidth: selected ? 2 : 1,
-        },
-      ]}
+    <View
+      style={[styles.toggle, { height: 40 * size, borderRadius: 20 * size, padding: 3 * size }, style]}
+      accessibilityRole="radiogroup"
     >
-      <Text allowFontScaling={false} style={{ fontSize: 34 * s, color: colors.black }}>
-        {LANGUAGE_META[lang].flag}
-      </Text>
-    </Pressable>
+      {LANGUAGES.map((l) => {
+        const selected = l === lang;
+        return (
+          <Pressable
+            key={l}
+            onPress={() => onChange(l)}
+            hitSlop={6}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            accessibilityLabel={LANGUAGE_META[l].title}
+            style={[
+              styles.toggleItem,
+              {
+                borderRadius: 17 * size,
+                paddingHorizontal: 14 * size,
+                backgroundColor: selected ? colors.brown : 'transparent',
+              },
+            ]}
+          >
+            <Text
+              allowFontScaling={false}
+              style={{
+                fontSize: 15 * size,
+                fontWeight: selected ? '700' : '500',
+                color: selected ? colors.white : colors.brown,
+              }}
+            >
+              {LANGUAGE_META[l].short}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -117,9 +127,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  langButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.45)',
+  toggle: {
+    position: 'absolute',
+    zIndex: 10,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(124,102,66,0.45)',
   },
+  toggleItem: { justifyContent: 'center', alignItems: 'center' },
 });

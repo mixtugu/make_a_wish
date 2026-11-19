@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,6 +21,8 @@ import { isNfcAvailable } from '../services/nfc';
 import { clearCurrentData } from '../services/wishFlow';
 import { useSettings } from '../settings/SettingsContext';
 import { colors } from '../theme';
+import { clearRecorded } from '../testmode/testCards';
+import { confirmDestructive, notify } from '../utils/dialog';
 
 interface Props {
   onClose: () => void;
@@ -75,35 +76,26 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
   };
 
   const confirmClear = () => {
-    Alert.alert('Clear currentdata', 'This deletes every in-progress state (waiting, nfctagged, etc.). Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await clearCurrentData(db());
-            Alert.alert('Done', 'currentdata has been cleared.');
-          } catch (e) {
-            Alert.alert('Failed', String(e));
-          }
-        },
+    confirmDestructive(
+      'Clear currentdata',
+      'This deletes every in-progress state (waiting, nfctagged, etc.). Continue?',
+      'Delete',
+      async () => {
+        try {
+          await clearCurrentData(db());
+          notify('Done', 'currentdata has been cleared.');
+        } catch (e) {
+          notify('Failed', String(e));
+        }
       },
-    ]);
+    );
   };
 
   const confirmReset = () => {
-    Alert.alert('Reset settings', 'All settings will return to their defaults.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        style: 'destructive',
-        onPress: async () => {
-          await reset();
-          onClose();
-        },
-      },
-    ]);
+    confirmDestructive('Reset settings', 'All settings will return to their defaults.', 'Reset', async () => {
+      await reset();
+      onClose();
+    });
   };
 
   const save = async () => {
@@ -140,15 +132,12 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
 
           {resolved === 'ipad' && (
             <Section title="iPad guide">
-              <Text style={styles.label}>Default language</Text>
+              <Text style={styles.label}>Default language (every visit starts in this language)</Text>
               <Segmented
                 value={draft.defaultLanguage}
                 onChange={(v) => set('defaultLanguage', v)}
                 options={LANGUAGES.map((l) => ({ value: l, label: LANGUAGE_META[l].title }))}
               />
-              <Row label="Keep last visitor's language" hint="Original app behavior. When off, every visit starts in the language above.">
-                <Switch value={draft.rememberLastLanguage} onValueChange={(v) => set('rememberLastLanguage', v)} />
-              </Row>
               <Row label="Return to start when idle (sec)" hint="0 = off. Useful when a visitor walks away midway.">
                 <NumberInput value={draft.idleResetSeconds} onChange={(v) => set('idleResetSeconds', v)} />
               </Row>
@@ -177,6 +166,30 @@ export function SettingsScreen({ onClose, onSaved }: Props) {
               </Row>
             </Section>
           )}
+
+          <Section
+            title="Test mode"
+            footer={
+              'For checking the flow without NFC cards. Screens that wait for a touch show virtual card buttons ' +
+              '(Red 1–3, Yellow 1–3); pressing one sends the same request as a real touch, so recording, releasing, ' +
+              'image saving and the projector all work as usual. Test wishes are saved to the real server like any ' +
+              'other wish (remove them from the projector with X if needed). Turn this off before the exhibition.'
+            }
+          >
+            <Row label="Test mode (simulate NFC touches)" hint="Shows a red TEST MODE badge while on.">
+              <Switch value={draft.testMode} onValueChange={(v) => set('testMode', v)} />
+            </Row>
+            <View style={styles.buttonRow}>
+              <SmallButton
+                label="Forget test card marks"
+                onPress={() => {
+                  clearRecorded();
+                  notify('Done', 'The "✓ wish" marks on this device’s test cards were cleared.');
+                }}
+                subtle
+              />
+            </View>
+          </Section>
 
           <Section title="General">
             <Row label="Show settings (⚙︎) button" hint="Recommended off during the exhibition. When off, long-press the top-right corner for 2 seconds to open the menu.">

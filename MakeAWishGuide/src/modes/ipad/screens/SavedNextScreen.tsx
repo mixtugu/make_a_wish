@@ -12,6 +12,8 @@ import { useCurrentStatus } from '../../../live/LiveCurrent';
 import { transferTaggedToLocked } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import { log } from '../../../utils/log';
+import { TestTagPanel } from '../../../testmode/TestTagPanel';
+import { cardColor } from '../flow';
 import type { IPadScreenProps } from '../types';
 
 const TAGGED = [STATUS.nfcTagged] as const;
@@ -21,7 +23,7 @@ const TAGGED = [STATUS.nfcTagged] as const;
  * 그린 소원을 보여주고, 소원 종이를 iPhone 에 태그(status=nfctagged)하면
  * 이미지 업로드 + lockeddata 이관 후 다음 화면으로.
  */
-export function SavedNextScreen({ session, go }: IPadScreenProps) {
+export function SavedNextScreen({ session, next, preview }: IPadScreenProps) {
   const { scale: sc, s } = useScale(IPAD_DESIGN);
   const db = useApi();
   const { lang, nationality, drawing } = session;
@@ -37,12 +39,12 @@ export function SavedNextScreen({ session, go }: IPadScreenProps) {
     } catch (e) {
       log('savedNext', '이관 실패', e);
     }
-    go('attach');
+    await next();
   });
 
   useEffect(() => {
-    if (tagged) onTagged();
-  }, [tagged]);
+    if (tagged && !preview) onTagged(); // 미리보기에서는 실제 태그 상태에 반응하지 않음
+  }, [tagged, preview]);
 
   const nfcImage =
     nationality === 'japanese' ? 'nfctouchj' : nationality === 'foreignResident' ? 'nfctouchf' : 'nfctouch';
@@ -84,6 +86,14 @@ export function SavedNextScreen({ session, go }: IPadScreenProps) {
         </View>
       </View>
 
+      {/* 테스트 모드: NFC 대신 가상 카드로 기록 태그 */}
+      {!preview && (
+        <TestTagPanel
+        kind="record"
+        expected={nationality ? cardColor('record', nationality) : undefined}
+        style={{ bottom: sc(70) }}
+      />
+      )}
       <View style={styles.footer}>
         <Footer scale={s} />
       </View>

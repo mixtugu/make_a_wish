@@ -13,7 +13,7 @@ import type { IPadScreenProps } from '../types';
 const OPTIONS: Nationality[] = ['japanese', 'foreignResident'];
 
 /** 원본 NationalityChooseView (SwiftUI .offset 은 레이아웃에 영향을 주지 않는 translate 로 동일하게 재현) */
-export function NationalityScreen({ session, update, go }: IPadScreenProps) {
+export function NationalityScreen({ session, update, next }: IPadScreenProps) {
   const { scale: sc, s, width } = useScale(IPAD_DESIGN);
   const insets = useSafeAreaInsets();
   const { lang, nationality } = session;
@@ -86,7 +86,7 @@ export function NationalityScreen({ session, update, go }: IPadScreenProps) {
 
       <Pressable
         disabled={!nationality}
-        onPress={() => go('draw')}
+        onPress={next}
         accessibilityRole="button"
         accessibilityState={{ disabled: !nationality }}
         style={({ pressed }) => [

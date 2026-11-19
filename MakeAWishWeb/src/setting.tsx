@@ -1,26 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type FrameLayout } from './api';
+import { EMA_BACKGROUND, emaPreset, STAGE } from './emaLayout';
 
 /**
  * /setting 페이지
- * - 20개의 프레임을 자유 배치(드래그) + 리사이즈 가능
- * - 각 프레임의 (x,y,w,h)를 서버(D1 setting_layouts)에 저장/복원
- *   저장된 배치가 없으면 프로젝터 화면의 기본 배치(4열 그리드)로 20개를 채움
- * - 배경/프레임은 모두 흰색, 평소엔 테두리 없음, 호버 시 연한 회색 테두리
+ * - 에마 사진(실제 크기) 위에서 소원 자리 16개를 드래그·리사이즈로 미세 조정
+ * - 각 자리의 (x,y,w,h, 사진 픽셀 기준)를 서버(D1 setting_layouts, frame-21~36)에 저장/복원
+ *   저장된 값이 없으면 사진에서 측정한 나무판 위치(emaLayout.ts)를 사용
+ * - 번호 = 소원이 채워지는 순서 (1 = 가장 최근 소원, 가운데 판)
  */
 
-const FRAME_COUNT = 20;
-
-// 프로젝터 화면(App.tsx)의 기본 배치와 같은 그리드
+// 사진에 맞춘 기본 배치 (에마 16개)
 function defaultViews(): Record<string, { x: number; y: number; w: number; h: number }> {
-  const baseW = 320, baseH = 220, margin = 16, cols = 4;
   const map: Record<string, { x: number; y: number; w: number; h: number }> = {};
-  for (let i = 0; i < FRAME_COUNT; i++) {
-    const col = i % cols; const r = Math.floor(i / cols);
-    map[`frame-${i + 1}`] = { x: col * (baseW + margin), y: r * (baseH + margin), w: baseW, h: baseH };
-  }
+  for (const f of emaPreset()) map[f.id] = { x: f.x, y: f.y, w: f.w, h: f.h };
   return map;
 }
+
+// 프레임 id → 채워지는 순서 번호 (1 = 가장 최근 소원)
+const SLOT_OF: Record<string, number> = Object.fromEntries(emaPreset().map((f, i) => [f.id, i + 1]));
 
 export default function SettingPage() {
   const [views, setViews] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
@@ -49,7 +47,8 @@ export default function SettingPage() {
         const data = await api.listLayouts();
         const map = defaultViews(); // 저장 안 된 프레임은 기본 배치
         for (const it of data) {
-          map[it.id] = { x: it.x, y: it.y, w: it.w, h: it.h };
+          // 에마 자리(frame-21~)만 사용. 예전 격자 배치(frame-1~20)는 무시
+          if (map[it.id]) map[it.id] = { x: it.x, y: it.y, w: it.w, h: it.h };
         }
         setViews(map);
       } catch (e: any) {
@@ -177,6 +176,31 @@ export default function SettingPage() {
       >
         clear
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (!window.confirm('모든 소원 자리를 사진의 나무판 위치로 되돌릴까요?')) return;
+          setViews(defaultViews());
+          setStatusMsg('나무판 위치로 되돌렸습니다');
+        }}
+        style={{
+          position: 'absolute',
+          top: 8,
+          left: 64,
+          zIndex: 2000,
+          padding: '6px 10px',
+          fontSize: 12,
+          color: '#fff',
+          background: '#7c6642',
+          border: 'none',
+          borderRadius: 6,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+          cursor: 'pointer',
+        }}
+        title="사진에서 측정한 나무판 위치로 되돌리기"
+      >
+        에마 위치로 되돌리기
+      </button>
       {statusMsg && (
         <div style={{ position: 'absolute', top: 48, left: 8, padding: '6px 8px', fontSize: 12, background: 'rgba(248,250,252,0.95)', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a' }}>
           {statusMsg}
@@ -191,7 +215,16 @@ export default function SettingPage() {
             프레임 배치가 없습니다.
           </div>
         ))}
-        <div style={{ position: 'relative', minWidth: 1200, minHeight: 800 }}>
+        {/* 에마 사진을 실제 크기로 (자리 좌표 = 사진 픽셀) */}
+        <div
+          style={{
+            position: 'relative',
+            width: STAGE.width,
+            height: STAGE.height,
+            backgroundImage: `url(${EMA_BACKGROUND})`,
+            backgroundSize: '100% 100%',
+          }}
+        >
           {Object.entries(views).map(([id, v]) => (
             <div
               key={id}
@@ -228,9 +261,9 @@ export default function SettingPage() {
                 top: Number(v.y),
                 width: Number(v.w),
                 height: Number(v.h),
-                border: hovered === id ? '1px solid #64748b' : '1px solid #cbd5e1',
-                borderRadius: 8,
-                background: '#ffffff',
+                border: hovered === id ? '2px solid #22c55e' : '1px dashed rgba(34,197,94,0.9)',
+                borderRadius: 2,
+                background: 'rgba(34,197,94,0.12)',
                 boxShadow: '0 0 0 rgba(0,0,0,0)',
                 overflow: 'hidden',
                 resize: 'both',
@@ -239,8 +272,8 @@ export default function SettingPage() {
                 zIndex: topId === id ? 1000 : 1,
               }}
             >
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12 }}>
-                {id}
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#14532d', fontSize: 14, fontWeight: 700 }}>
+                {SLOT_OF[id] ?? id}
               </div>
             </div>
           ))}

@@ -15,9 +15,11 @@ interface Props {
   onClose: () => void;
   onRestart: () => void;
   onOpenSettings: () => void;
+  /** 화면 미리보기 (서버·NFC 없이 모양만) */
+  onOpenPreview: () => void;
 }
 
-export function AdminMenu({ visible, onClose, onRestart, onOpenSettings }: Props) {
+export function AdminMenu({ visible, onClose, onRestart, onOpenSettings, onOpenPreview }: Props) {
   const { resolvedMode, update } = useSettings();
   const transport = useLiveTransport();
   const other = resolvedMode === 'ipad' ? 'iphone' : 'ipad';
@@ -46,6 +48,7 @@ export function AdminMenu({ visible, onClose, onRestart, onOpenSettings }: Props
               onClose();
             }}
           />
+          <MenuButton label="Screen preview (no server)" onPress={onOpenPreview} />
           <MenuButton label="Settings" onPress={onOpenSettings} />
           <MenuButton label="Close" onPress={onClose} subtle />
         </Pressable>

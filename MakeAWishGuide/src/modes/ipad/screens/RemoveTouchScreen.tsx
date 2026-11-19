@@ -8,21 +8,23 @@ import { SvgAsset } from '../../../components/SvgAsset';
 import { STATUS } from '../../../config/defaults';
 import { useApi } from '../../../hooks/useApi';
 import { useScale } from '../../../hooks/useScale';
-import { strings } from '../../../i18n/strings';
+import { flowStrings } from '../../../i18n/strings';
 import { useCurrentStatus } from '../../../live/LiveCurrent';
 import { transferUnlockToUnlocked } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
 import { log } from '../../../utils/log';
+import { TestTagPanel } from '../../../testmode/TestTagPanel';
+import { cardColor } from '../flow';
 import type { IPadScreenProps } from '../types';
 
 const UNLOCK_TAGGED = [STATUS.unlockNfcTagged] as const;
 
 /**
- * 원본 RemoveTouchView
- * 다른 색의 소원 종이를 떼어 iPhone 에 태그(status=unlocknfctagged)하면
- * lockeddata → unlockeddata 이관 후 다음 화면으로.
+ * 원본 RemoveTouchView – 소원 해제
+ * 끈에서 상대 쪽 색의 소원 종이(일본인: 빨강, 외국인: 노랑)를 떼어 iPhone 에 태그(status=unlocknfctagged)하면
+ * lockeddata → unlockeddata 이관 후 다음 화면으로. (일본인은 체험의 처음, 외국인은 끝에 옴)
  */
-export function RemoveTouchScreen({ session, go }: IPadScreenProps) {
+export function RemoveTouchScreen({ session, next, preview }: IPadScreenProps) {
   const { scale: sc, s, height } = useScale(IPAD_DESIGN);
   const insets = useSafeAreaInsets();
   const db = useApi();
@@ -39,12 +41,12 @@ export function RemoveTouchScreen({ session, go }: IPadScreenProps) {
     } catch (e) {
       log('removeTouch', '이관 실패', e);
     }
-    go('unlocked');
+    await next();
   });
 
   useEffect(() => {
-    if (tagged) onTagged();
-  }, [tagged]);
+    if (tagged && !preview) onTagged(); // 미리보기에서는 실제 태그 상태에 반응하지 않음
+  }, [tagged, preview]);
 
   const image =
     nationality === 'japanese'
@@ -71,10 +73,18 @@ export function RemoveTouchScreen({ session, go }: IPadScreenProps) {
           lineSpacing={sc(18)}
           style={{ paddingHorizontal: sc(32) }}
         >
-          {strings.removeTouch.message[lang]}
+          {flowStrings.pickReleaseCard[nationality ?? 'foreignResident'][lang]}
         </AppText>
       </View>
 
+      {/* 테스트 모드: NFC 대신 가상 카드로 해제 태그 */}
+      {!preview && (
+        <TestTagPanel
+        kind="release"
+        expected={nationality ? cardColor('release', nationality) : undefined}
+        style={{ bottom: insets.bottom + sc(70) }}
+      />
+      )}
       <View style={styles.footer} pointerEvents="none">
         <Footer scale={s} />
       </View>

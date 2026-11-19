@@ -12,14 +12,14 @@ import { log } from '../../../utils/log';
 import type { IPadScreenProps } from '../types';
 
 /** 원본 ThankView: currentdata 정리, 탭하면 처음(언어 선택)으로 */
-export function ThankScreen({ session, restart }: IPadScreenProps) {
+export function ThankScreen({ session, restart, preview }: IPadScreenProps) {
   const { scale: sc } = useScale(IPAD_DESIGN);
   const db = useApi();
   const { lang } = session;
 
   useEffect(() => {
-    clearCurrentData(db).catch((e) => log('thank', 'currentdata 정리 실패', e));
-  }, [db]);
+    if (!preview) clearCurrentData(db).catch((e) => log('thank', 'currentdata 정리 실패', e));
+  }, [db, preview]);
 
   return (
     <Pressable style={[styles.root, { gap: sc(32) }]} onPress={restart} accessibilityRole="button">

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, useDisplayData, type UnlockedRow } from './api';
 import './App.css';
+import { EMA_BACKGROUND, resolveEmaFrames, STAGE, WISH_INSET } from './emaLayout';
+import { ReleaseReveal } from './ReleaseReveal';
 
 function App() {
   const [hovered, setHovered] = useState<string | null>(null);
@@ -8,7 +10,9 @@ function App() {
   const [statusMsg, setStatusMsg] = useState<string>('');
 
   // 서버가 연결 즉시 + 바뀔 때마다 unlockeddata / 프레임 배치를 보내 줌 (WebSocket)
-  const { rows, setRows, frames } = useDisplayData();
+  const { rows, setRows, frames, loaded } = useDisplayData();
+  const scale = useStageScale();
+  const { current: revealing, done: revealDone } = useReleaseQueue(rows, loaded);
 
   // 이미지(스토리지) + DB 행 삭제 (상태 메시지 표시)
   const handleDelete = async (row: UnlockedRow) => {
@@ -42,21 +46,109 @@ function App() {
     }
   };
 
-  // 최신 이미지가 1번 슬롯, 그 다음이 2번 슬롯 ... 최대 20번까지 (21번째 이후는 보이지 않음)
+  // 최신 소원이 1번 자리(가운데 판), 그 다음이 2번 … 에마 개수(16)까지. 그보다 오래된 소원은 표시하지 않음
   const desc = [...rows].sort((a, b) => {
     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
     const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
     return tb - ta; // 최신 우선
   });
-  
-  const slotToRow: Record<number, UnlockedRow | undefined> = {};
-  for (let slot = 1; slot <= 20; slot++) {
-    const item = desc[slot - 1]; // 1번 슬롯 = desc[0] (최신)
-    if (item) slotToRow[slot] = item;
-  }
+  const boards = resolveEmaFrames(frames);
+  const placed = boards.map((box, i) => ({ box, slot: i + 1, row: desc[i] })).filter((p) => !!p.row);
+  // 애니메이션 중인 소원이 내려앉을 판
+  const revealTarget = revealing ? boards[desc.findIndex((r) => r.id === revealing.id)] : undefined;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#ffffff' }}>
+    // 사진 비율을 유지한 채 화면에 꽉 차게 (남는 부분은 사진 톤의 어두운 색)
+    <div style={{ position: 'fixed', inset: 0, background: '#16110d', overflow: 'hidden' }}>
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: STAGE.width,
+          height: STAGE.height,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          backgroundImage: `url(${EMA_BACKGROUND})`,
+          backgroundSize: '100% 100%',
+        }}
+      >
+        {placed.map(({ box, slot, row }) => {
+          const hoverKey = row!.id;
+          const isHovered = hovered === hoverKey;
+          return (
+            <div
+              key={box.id}
+              title={row!.image_url ?? ''}
+              style={{
+                position: 'absolute',
+                left: box.x,
+                top: box.y,
+                width: box.w,
+                height: box.h,
+                outline: isHovered ? '2px solid rgba(255,255,255,0.7)' : 'none',
+                cursor: 'default',
+              }}
+              onMouseEnter={() => setHovered(hoverKey)}
+              onMouseLeave={() => setHovered((prev) => (prev === hoverKey ? null : prev))}
+            >
+              {/* 소원 그림: 흰 바탕이 나무결에 섞이도록 multiply → 판에 직접 쓴 것처럼 보임
+                  (애니메이션 중인 소원은 내려앉을 때까지 비워 둠) */}
+              {revealing?.id !== row!.id && <img
+                src={row!.image_url ?? ''}
+                alt={`wish-${slot}`}
+                draggable={false}
+                style={{
+                  position: 'absolute',
+                  left: `${WISH_INSET.x * 100}%`,
+                  top: `${WISH_INSET.y * 100}%`,
+                  width: `${(1 - 2 * WISH_INSET.x) * 100}%`,
+                  height: `${(1 - 2 * WISH_INSET.y) * 100}%`,
+                  objectFit: 'contain',
+                  mixBlendMode: 'multiply',
+                  pointerEvents: 'none',
+                }}
+              />}
+              {isHovered && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 4,
+                    right: 4,
+                    bottom: 4,
+                    padding: '3px 6px',
+                    fontSize: 10,
+                    color: '#ffffff',
+                    background: 'rgba(0,0,0,0.55)',
+                    borderRadius: 4,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {`최신 ${slot}번째 소원`}
+                  {row!.created_at && ` · ${new Date(row!.created_at).toLocaleString()}`}
+                </div>
+              )}
+              {isHovered && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(row!); }}
+                  disabled={!!deleting[row!.id]}
+                  style={{ position: 'absolute', top: 4, right: 4, padding: '3px 7px', fontSize: 11, borderRadius: 4, border: 'none', background: deleting[row!.id] ? '#94a3b8' : '#ef4444', color: '#ffffff', cursor: deleting[row!.id] ? 'not-allowed' : 'pointer' }}
+                  title="이 소원을 화면에서 내립니다 (DB 행만 삭제, 그림 파일은 서버에 남음)"
+                >
+                  {deleting[row!.id] ? '…' : 'X'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        {revealing && (
+          <ReleaseReveal key={revealing.id + ':' + revealing.created_at} row={revealing} target={revealTarget} onDone={revealDone} />
+        )}
+      </div>
       {statusMsg && (
         <div style={{
           position: 'absolute', top: 8, left: 8,
@@ -67,123 +159,63 @@ function App() {
           {statusMsg}
         </div>
       )}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          overflow: 'auto',
-          background: '#ffffff',
-        }}
-      >
-        {(() => {
-          // 프레임 또는 기본 배치로 박스 계산
-          const getBox = (idx: number) => {
-            const f = frames[idx];
-            if (f) return f;
-            const baseW = 320, baseH = 220, margin = 16, cols = 4;
-            const col = idx % cols; const r = Math.floor(idx / cols);
-            return { x: col * (baseW + margin), y: r * (baseH + margin), w: baseW, h: baseH };
-          };
-
-          // 이미지가 배정된 슬롯만 렌더 (비어있는 프레임은 숨김)
-          const visibleIdx = Array.from({ length: 20 }, (_, i) => i).filter((i) => !!slotToRow[i + 1]);
-          const boxes = visibleIdx.map((i) => getBox(i));
-
-          const canvasW = Math.max(1200, ...(boxes.length ? boxes.map(b => Number(b.x) + Number(b.w) + 32) : [0]));
-          const canvasH = Math.max(800,  ...(boxes.length ? boxes.map(b => Number(b.y) + Number(b.h) + 32) : [0]));
-
-          return (
-            <div style={{ position: 'relative', minWidth: canvasW, minHeight: canvasH }}>
-              {visibleIdx.map((idx) => {
-                const slotNum = idx + 1;
-                const row = slotToRow[slotNum]!; // visibleIdx로 필터되어 있어 존재 보장
-                const box = getBox(idx);
-                const hoverKey = row.id;
-                return (
-                  <div
-                    key={`frame-${slotNum}`}
-                    title={row.image_url ?? ''}
-                    style={{
-                      position: 'absolute',
-                      left: Number(box.x),
-                      top: Number(box.y),
-                      width: Number(box.w),
-                      height: Number(box.h),
-                      border: hovered === hoverKey ? '1px solid #94a3b8' : '1px solid transparent',
-                      borderRadius: 8,
-                      background: '#ffffff',
-                      overflow: 'hidden',
-                      resize: 'none',
-                      cursor: 'default',
-                    }}
-                    onMouseEnter={() => setHovered(hoverKey)}
-                    onMouseLeave={() => setHovered((prev) => (prev === hoverKey ? null : prev))}
-                  >
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff' }}>
-                      <img
-                        src={row.image_url ?? ''}
-                        alt={`frame-${slotNum}`}
-                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
-                        loading="lazy"
-                        draggable={false}
-                      />
-                    </div>
-                    {hovered === hoverKey && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 8,
-                          right: 8,
-                          bottom: 8,
-                          padding: '6px 8px',
-                          fontSize: 12,
-                          color: '#ffffff',
-                          background: 'rgba(0,0,0,0.55)',
-                          borderRadius: 6,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          pointerEvents: 'none',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 2,
-                        }}
-                      >
-                        <span>{`최신 ${slotNum}번째 이미지`}</span>
-                        {row.created_at && (
-                          <span style={{ fontSize: 11, opacity: 0.85 }}>
-                            {new Date(row.created_at).toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {hovered === hoverKey && (
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
-                        disabled={!!deleting[row.id]}
-                        style={{ position: 'absolute', top: 8, right: 8, padding: '6px 10px', fontSize: 12, borderRadius: 6, border: '1px solid #e2e8f0', background: deleting[row.id] ? '#f1f5f9' : '#ef4444', color: '#ffffff', cursor: deleting[row.id] ? 'not-allowed' : 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}
-                        title="이 이미지를 목록에서 제거합니다 (DB만)"
-                      >
-                        {deleting[row.id] ? 'Deleting…' : 'X'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-
-              {rows.length === 0 && (
-                <div style={{ position: 'absolute', left: 24, top: 24, fontSize: 14, color: '#64748b' }}>
-                  불러온 이미지가 없습니다.
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </div>
     </div>
   );
+}
+
+/**
+ * 새로 풀린 소원을 차례로 하나씩 애니메이션.
+ * - 화면을 처음 열 때 이미 있던 소원은 애니메이션하지 않음
+ * - 여러 개가 한꺼번에 풀리면 오래된 것부터 순서대로
+ * - 키보드 R: 가장 최근 소원을 다시 재생 (설치·테스트 확인용)
+ */
+function useReleaseQueue(rows: UnlockedRow[], loaded: boolean) {
+  const seen = useRef<Set<string> | null>(null);
+  const [queue, setQueue] = useState<UnlockedRow[]>([]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (!seen.current) {
+      seen.current = new Set(rows.map((r) => r.id));
+      return;
+    }
+    const known = seen.current;
+    const fresh = rows
+      .filter((r) => !known.has(r.id))
+      .sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime());
+    if (!fresh.length) return;
+    fresh.forEach((r) => known.add(r.id));
+    setQueue((q) => [...q, ...fresh]);
+  }, [rows, loaded]);
+
+  const latest = useRef<UnlockedRow | undefined>(undefined);
+  latest.current = [...rows].sort(
+    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
+  )[0];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'r' || e.key === 'R') && latest.current) {
+        const row = latest.current;
+        setQueue((q) => [...q, row]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return { current: queue[0], done: () => setQueue((q) => q.slice(1)) };
+}
+
+/** 화면에 사진 전체가 들어가도록 하는 배율 (창 크기가 바뀌면 다시 계산) */
+function useStageScale(): number {
+  const calc = () => Math.min(window.innerWidth / STAGE.width, window.innerHeight / STAGE.height);
+  const [scale, setScale] = useState(calc);
+  useEffect(() => {
+    const onResize = () => setScale(calc());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return scale;
 }
 
 export default App;

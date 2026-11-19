@@ -4,31 +4,24 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { AppText } from '../../../components/AppText';
 import { Footer } from '../../../components/Footer';
 import { SvgAsset } from '../../../components/SvgAsset';
-import { STATUS } from '../../../config/defaults';
 import { useScale } from '../../../hooks/useScale';
-import { useApi } from '../../../hooks/useApi';
 import { strings } from '../../../i18n/strings';
-import { insertStatus } from '../../../services/wishFlow';
 import { colors, IPAD_DESIGN } from '../../../theme';
-import { log } from '../../../utils/log';
 import type { IPadScreenProps } from '../types';
 
-/** 원본 WishSavedView: 탭하면 currentdata 에 unlockwaiting 추가 후 다음 화면 */
-export function WishSavedScreen({ session, go }: IPadScreenProps) {
+/**
+ * 원본 WishSavedView: 탭하면 다음 화면
+ * (외국인 → 해제 단계: 이때 currentdata 에 unlockwaiting 추가는 IPadGuide.next 가 처리 / 일본인 → 감사 화면)
+ */
+export function WishSavedScreen({ session, next }: IPadScreenProps) {
   const { scale: sc, s } = useScale(IPAD_DESIGN);
-  const db = useApi();
   const { lang } = session;
   const [busy, setBusy] = useState(false);
 
   const onContinue = async () => {
     if (busy) return;
     setBusy(true);
-    try {
-      await insertStatus(db, STATUS.unlockWaiting);
-    } catch (e) {
-      log('wishSaved', 'unlockwaiting insert 실패', e);
-    }
-    go('removeTouch');
+    await next();
   };
 
   return (
