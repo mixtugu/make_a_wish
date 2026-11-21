@@ -13,7 +13,37 @@ echo "=============================================="
 echo "  프로젝트: $PROJECT_DIR"
 echo
 
-# 0. 다른 스크립트 실행 권한 + 인터넷에서 받은 파일 격리 표시 제거
+# 0. 보호 폴더(바탕화면 등)에 있으면 백그라운드 실행이 안 되므로 홈 폴더로 옮김
+if in_protected_folder; then
+  echo "  ! 프로젝트가 macOS 보호 폴더 안에 있습니다:"
+  echo "      $PROJECT_DIR"
+  echo "    여기서는 백그라운드 서버가 파일을 읽지 못합니다 ('Operation not permitted')."
+  echo "    홈 폴더 바로 아래로 옮기면 해결됩니다:"
+  echo "      $MOVE_SRC"
+  echo "      → $MOVE_DEST"
+  if [ -e "$MOVE_DEST" ]; then
+    echo
+    echo "  ✗ $MOVE_DEST 가 이미 있습니다. 지우거나 이름을 바꾼 뒤 다시 실행해 주세요."
+    pause_exit 1
+  fi
+  if ask_yes "  지금 옮길까요?" y; then
+    # 이전에 등록된 백그라운드 작업(옛 경로)을 먼저 내림
+    is_loaded && launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null
+    cd "$HOME" || exit 1
+    if ! mv "$MOVE_SRC" "$MOVE_DEST"; then
+      echo "  ✗ 옮기지 못했습니다. Finder 에서 직접 홈 폴더로 옮긴 뒤 그 안의 install.command 를 실행해 주세요."
+      pause_exit 1
+    fi
+    echo "  ✓ 옮겼습니다. 이제부터는 이 폴더의 파일을 쓰세요: $SAFE_PROJECT_DIR/mac"
+    open "$SAFE_PROJECT_DIR/mac"
+    echo
+    exec /bin/bash "$SAFE_PROJECT_DIR/mac/install.command"
+  fi
+  echo "  계속 진행하지만 서버가 시작되지 않을 수 있습니다."
+  echo
+fi
+
+# 다른 스크립트 실행 권한 + 인터넷에서 받은 파일 격리 표시 제거
 chmod +x "$MAC_DIR"/*.command "$MAC_DIR"/*.sh 2>/dev/null
 xattr -dr com.apple.quarantine "$MAC_DIR" 2>/dev/null
 
@@ -220,6 +250,7 @@ else
   echo "  ! 아직 시작되지 않았습니다. 잠시 후 start.command 로 상태를 확인하세요."
   echo "    로그: $LOG_FILE"
   tail -n 20 "$LOG_FILE" 2>/dev/null | sed 's/^/    /'
+  explain_permission_error
 fi
 
 echo "----------------------------------------------"

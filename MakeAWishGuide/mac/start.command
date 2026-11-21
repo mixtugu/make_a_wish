@@ -9,6 +9,12 @@ echo "=============================================="
 echo "  Make a Wish – Expo 서버 시작"
 echo "=============================================="
 
+if in_protected_folder; then
+  echo "  ! 프로젝트가 macOS 보호 폴더(바탕화면·문서·다운로드 등)에 있어 서버를 백그라운드로 실행할 수 없습니다."
+  echo "    install.command 를 다시 실행하면 $MOVE_DEST 로 옮겨 줍니다."
+  pause_exit 1
+fi
+
 if [ ! -f "$PLIST" ] || [ ! -f "$CONFIG_FILE" ]; then
   echo "  먼저 install.command 로 초기 설치를 해 주세요."
   pause_exit 1
@@ -46,5 +52,6 @@ else
   tail -n 30 "$LOG_FILE" 2>/dev/null | sed 's/^/    /'
   echo
   echo "  로그 전체: $LOG_FILE"
+  explain_permission_error
   pause_exit 1
 fi

@@ -15,6 +15,37 @@ DOMAIN="gui/$(id -u)"
 # Expo SDK 58 이 지원하는 Node: ^22.13.0 || ^24.3.0 || >=26 (23·25 같은 홀수 버전은 안 됨)
 NODE_REQUIREMENT="22.13 이상의 22, 24.3 이상의 24, 또는 26 이상"
 
+# 보호 폴더에 있을 때 install 이 옮기는 단위와 위치.
+# 상위 폴더가 프로젝트 묶음(git 저장소, 서버·웹 폴더 포함)이면 묶음째로 홈 폴더 바로 아래로 옮김
+if [ -d "$PROJECT_DIR/../.git" ] || [ -d "$PROJECT_DIR/../MakeAWishServer" ]; then
+  MOVE_SRC="$(dirname "$PROJECT_DIR")"
+  MOVE_DEST="$HOME/$(basename "$MOVE_SRC")"
+  SAFE_PROJECT_DIR="$MOVE_DEST/$(basename "$PROJECT_DIR")"
+else
+  MOVE_SRC="$PROJECT_DIR"
+  MOVE_DEST="$HOME/$(basename "$PROJECT_DIR")"
+  SAFE_PROJECT_DIR="$MOVE_DEST"
+fi
+
+# macOS 는 바탕화면·문서·다운로드·iCloud·외장 디스크를 앱별로 보호합니다(TCC).
+# 터미널은 허용받아도 백그라운드의 /bin/bash 는 허용이 없어 "Operation not permitted" 로 실행이 안 됨.
+in_protected_folder() {
+  case "$PROJECT_DIR/" in
+    "$HOME/Desktop/"* | "$HOME/Documents/"* | "$HOME/Downloads/"* | "$HOME/Library/Mobile Documents/"* | /Volumes/*) return 0 ;;
+  esac
+  return 1
+}
+
+# 로그에 보호 폴더 접근 거부가 찍혔으면 안내
+explain_permission_error() {
+  if grep -q "Operation not permitted" "$LOG_FILE" 2>/dev/null; then
+    echo
+    echo "  ! 'Operation not permitted': 프로젝트가 macOS 보호 폴더(바탕화면·문서·다운로드 등)에 있어"
+    echo "    백그라운드 실행이 파일을 읽지 못했습니다. install.command 를 다시 실행하면"
+    echo "    $MOVE_DEST 로 옮겨서 해결합니다."
+  fi
+}
+
 # 설정 파일을 읽고 Node 를 PATH 에 추가 (launchd 는 PATH 가 거의 비어 있음)
 load_config() {
   if [ -f "$CONFIG_FILE" ]; then
