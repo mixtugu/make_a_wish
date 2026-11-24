@@ -19,23 +19,23 @@ function App() {
     if (!row?.id) return;
     setDeleting((prev) => ({ ...prev, [row.id]: true }));
     try {
-      setStatusMsg(`삭제 시작: id=${row.id}`);
+      setStatusMsg(`削除開始: id=${row.id}`);
       // DB 삭제 (unlockeddata)
       try {
         await api.deleteUnlocked(row.id);
       } catch (delErr: any) {
-        setStatusMsg((m) => m + `\n[에러] DB 삭제 실패: ${delErr?.message ?? delErr}`);
-        alert(`DB 삭제 실패:\n${delErr?.message ?? delErr}`);
+        setStatusMsg((m) => m + `\n[エラー] DB削除失敗: ${delErr?.message ?? delErr}`);
+        alert(`DB削除に失敗しました:\n${delErr?.message ?? delErr}`);
         return;
       }
-      setStatusMsg((m) => m + `\nDB 삭제 성공`);
+      setStatusMsg((m) => m + `\nDB削除成功`);
       // 로컬 상태 반영
       setRows((prev) => prev.filter((r) => r.id !== row.id));
-      setStatusMsg((m) => m + `\n완료 ✅ (서버의 그림 파일은 유지됨)`);
+      setStatusMsg((m) => m + `\n完了 ✅（サーバーの画像ファイルは残ります）`);
     } catch (e: any) {
       console.error(e);
-      setStatusMsg((m) => m + `\n[예외] ${e?.message ?? e}`);
-      alert('삭제 중 예외가 발생했습니다.\n콘솔을 확인해 주세요.');
+      setStatusMsg((m) => m + `\n[例外] ${e?.message ?? e}`);
+      alert('削除中に例外が発生しました。\nコンソールを確認してください。');
     } finally {
       setDeleting((prev) => {
         const next = { ...prev };
@@ -126,7 +126,7 @@ function App() {
                     pointerEvents: 'none',
                   }}
                 >
-                  {`최신 ${slot}번째 소원`}
+                  {`新しい順 ${slot}番目の願い`}
                   {row!.created_at && ` · ${new Date(row!.created_at).toLocaleString()}`}
                 </div>
               )}
@@ -137,7 +137,7 @@ function App() {
                   onClick={(e) => { e.stopPropagation(); handleDelete(row!); }}
                   disabled={!!deleting[row!.id]}
                   style={{ position: 'absolute', top: 4, right: 4, padding: '3px 7px', fontSize: 11, borderRadius: 4, border: 'none', background: deleting[row!.id] ? '#94a3b8' : '#ef4444', color: '#ffffff', cursor: deleting[row!.id] ? 'not-allowed' : 'pointer' }}
-                  title="이 소원을 화면에서 내립니다 (DB 행만 삭제, 그림 파일은 서버에 남음)"
+                  title="この願いを画面から外します（DBの行のみ削除、画像ファイルはサーバーに残ります）"
                 >
                   {deleting[row!.id] ? '…' : 'X'}
                 </button>

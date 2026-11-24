@@ -15,7 +15,7 @@ export default function ConnectGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onAuth = () => {
       setReady(false);
-      setMessage('토큰이 올바르지 않거나 없습니다. 다시 입력해 주세요.');
+      setMessage('トークンが正しくないか、設定されていません。もう一度入力してください。');
     };
     window.addEventListener(AUTH_EVENT, onAuth);
     return () => window.removeEventListener(AUTH_EVENT, onAuth);
@@ -26,7 +26,7 @@ export default function ConnectGate({ children }: { children: ReactNode }) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setMessage('연결 확인 중...');
+    setMessage('接続を確認中...');
     try {
       await api.test({ url, token });
       saveConfig({ url, token });
@@ -34,7 +34,7 @@ export default function ConnectGate({ children }: { children: ReactNode }) {
       setMessage('');
       setReady(true);
     } catch (err) {
-      setMessage(err instanceof AuthError ? '토큰이 올바르지 않습니다.' : `연결 실패: ${err instanceof Error ? err.message : err}`);
+      setMessage(err instanceof AuthError ? 'トークンが正しくありません。' : `接続失敗: ${err instanceof Error ? err.message : err}`);
     } finally {
       setBusy(false);
     }
@@ -44,20 +44,20 @@ export default function ConnectGate({ children }: { children: ReactNode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <form onSubmit={handleSubmit} style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 10, color: '#0f172a', fontSize: 13 }}>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>Make a Wish 서버 연결</div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>Make a Wish サーバー接続</div>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          서버 주소
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://make-a-wish-server.<계정>.workers.dev" required style={inputStyle} />
+          サーバーアドレス
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://make-a-wish-server.<アカウント>.workers.dev" required style={inputStyle} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          API 토큰
+          APIトークン
           <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" required style={inputStyle} />
         </label>
         <button type="submit" disabled={busy} style={{ padding: '8px 12px', fontSize: 14, color: '#ffffff', background: busy ? '#94a3b8' : '#0f172a', border: 'none', borderRadius: 6, cursor: busy ? 'not-allowed' : 'pointer' }}>
-          {busy ? '확인 중…' : '연결'}
+          {busy ? '確認中…' : '接続'}
         </button>
         {message && <div style={{ color: '#64748b', whiteSpace: 'pre-wrap' }}>{message}</div>}
-        <div style={{ color: '#94a3b8', fontSize: 12 }}>토큰은 이 브라우저에만 저장됩니다.</div>
+        <div style={{ color: '#94a3b8', fontSize: 12 }}>トークンはこのブラウザにのみ保存されます。</div>
       </form>
     </div>
   );

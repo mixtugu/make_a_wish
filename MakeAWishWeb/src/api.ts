@@ -64,7 +64,7 @@ async function request<T>(
   testCfg?: ServerConfig,
 ): Promise<T> {
   const cfg = testCfg ?? loadConfig();
-  if (!cfg.url) throw new Error('서버 주소가 설정되지 않았습니다');
+  if (!cfg.url) throw new Error('サーバーアドレスが設定されていません');
   const res = await fetch(`${cfg.url}${path}`, {
     method,
     headers: {
@@ -77,7 +77,7 @@ async function request<T>(
   const text = await res.text();
   if (res.status === 401) {
     if (!testCfg) forgetToken(); // 저장된 토큰이 틀림 → 연결 화면으로
-    throw new AuthError('토큰이 올바르지 않습니다');
+    throw new AuthError('トークンが正しくありません');
   }
   if (!res.ok) throw new Error(`${method} ${path} → HTTP ${res.status} ${text}`);
   return (text ? JSON.parse(text) : {}) as T;

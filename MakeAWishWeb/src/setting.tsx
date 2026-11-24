@@ -53,7 +53,7 @@ export default function SettingPage() {
         setViews(map);
       } catch (e: any) {
         console.error('[layouts load] error:', e);
-        setStatusMsg(`[로드 실패] ${e?.message ?? e}`);
+        setStatusMsg(`[読み込み失敗] ${e?.message ?? e}`);
       } finally {
         setIsLoading(false);
       }
@@ -77,7 +77,7 @@ export default function SettingPage() {
         await api.saveLayouts(payload);
       } catch (e: any) {
         console.error('[layouts save] error:', e);
-        setStatusMsg(`[저장 실패] ${e?.message ?? e}`);
+        setStatusMsg(`[保存失敗] ${e?.message ?? e}`);
       }
     }, 400);
     return () => clearTimeout(timer);
@@ -142,12 +142,12 @@ export default function SettingPage() {
   // 서버(POST /api/cleanup)가 한 번에 트랜잭션으로 처리
   const handleCleanup = async () => {
     try {
-      setStatusMsg('정리 중...');
+      setStatusMsg('整理中...');
       const { current, locked } = await api.cleanup();
-      setStatusMsg(`정리 완료: currentdata ${current}건 삭제, lockeddata ${locked}건 삭제`);
+      setStatusMsg(`整理完了: currentdata ${current}件削除、lockeddata ${locked}件削除`);
     } catch (e: any) {
       console.error(e);
-      setStatusMsg(`[정리 실패] ${e?.message ?? e}`);
+      setStatusMsg(`[整理失敗] ${e?.message ?? e}`);
     }
   };
 
@@ -172,16 +172,16 @@ export default function SettingPage() {
           boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
           cursor: 'pointer',
         }}
-        title="currentdata 전체 삭제 / lockeddata 중복 최신 삭제"
+        title="currentdata を全削除 / lockeddata の重複のうち新しい方を削除"
       >
         clear
       </button>
       <button
         type="button"
         onClick={() => {
-          if (!window.confirm('모든 소원 자리를 사진의 나무판 위치로 되돌릴까요?')) return;
+          if (!window.confirm('すべての願いの位置を写真の絵馬の位置に戻しますか？')) return;
           setViews(defaultViews());
-          setStatusMsg('나무판 위치로 되돌렸습니다');
+          setStatusMsg('絵馬の位置に戻しました');
         }}
         style={{
           position: 'absolute',
@@ -197,9 +197,9 @@ export default function SettingPage() {
           boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
           cursor: 'pointer',
         }}
-        title="사진에서 측정한 나무판 위치로 되돌리기"
+        title="写真から測定した絵馬の位置に戻す"
       >
-        에마 위치로 되돌리기
+        絵馬の位置に戻す
       </button>
       {statusMsg && (
         <div style={{ position: 'absolute', top: 48, left: 8, padding: '6px 8px', fontSize: 12, background: 'rgba(248,250,252,0.95)', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a' }}>
@@ -212,7 +212,7 @@ export default function SettingPage() {
       >
         {isLoading ? null : (Object.keys(views).length === 0 && (
           <div style={{ position: 'absolute', top: 24, left: 24, color: '#64748b', fontSize: 13 }}>
-            프레임 배치가 없습니다.
+            フレームの配置がありません。
           </div>
         ))}
         {/* 에마 사진을 실제 크기로 (자리 좌표 = 사진 픽셀) */}
